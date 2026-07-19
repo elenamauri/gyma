@@ -1,6 +1,24 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import type {
   ExerciseIndexEntry,
   Routine,
@@ -17,7 +35,12 @@ export function useRoutineStats(
 ) {
   return useMemo(() => {
     if (!routine) {
-      return { sets: 0, durationMin: 0, primary: [] as string[], secondary: [] as string[] };
+      return {
+        sets: 0,
+        durationMin: 0,
+        primary: [] as string[],
+        secondary: [] as string[],
+      };
     }
     if (routine.type === "reps") {
       const list = routine.exercises as RoutineExerciseReps[];
@@ -142,6 +165,7 @@ export function RoutineExerciseList({
   onChangeReps,
   onChangeTimed,
   onRemove,
+  onReorder,
   weightUnit = "kg",
 }: {
   type: Routine["type"];
@@ -152,188 +176,381 @@ export function RoutineExerciseList({
   onChangeReps?: (id: string, patch: Partial<RoutineExerciseReps>) => void;
   onChangeTimed?: (id: string, patch: Partial<RoutineExerciseTimed>) => void;
   onRemove?: (id: string) => void;
+  /** When set, rows become drag-sortable (handle on the left). */
+  onReorder?: (activeId: string, overId: string) => void;
   weightUnit?: "kg" | "lb";
 }) {
-  if (type === "reps") {
-    return (
-      <ul className="divide-y divide-hairline">
-        {(exercises as RoutineExerciseReps[]).map((ex) => {
-          const cat = catalog.find((c) => c.id === ex.exerciseId);
-          const open = editingId === ex.id;
-          return (
-            <li key={ex.id} className="py-3">
-              <button
-                type="button"
-                className="flex w-full items-center gap-3 text-left touch-manipulation"
-                onClick={() => onSelect?.(ex.id)}
-                disabled={!onSelect}
-              >
-                <ExerciseThumb
-                  size="sm"
-                  exerciseId={ex.exerciseId}
-                  exerciseName={ex.exerciseName}
-                  imagePath={cat?.images[0]}
-                  primaryMuscles={cat?.primaryMuscles ?? []}
-                  secondaryMuscles={cat?.secondaryMuscles ?? []}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{ex.exerciseName}</div>
-                  {!open && (
-                    <div className="text-sm text-muted">
-                      {ex.sets} set · {ex.reps} rip.
-                      {ex.targetWeight !== undefined
-                        ? ` · ${ex.targetWeight}`
-                        : ""}
-                    </div>
-                  )}
-                </div>
-                {onSelect ? (
-                  <span
-                    className={`text-lg text-muted transition-transform ${
-                      open ? "rotate-0" : "-rotate-90"
-                    }`}
-                    aria-hidden
-                  >
-                    ⌄
-                  </span>
-                ) : null}
-              </button>
+  const ids = exercises.map((e) => e.id);
+  const sortable = !!onReorder;
 
-              {open && onChangeReps && (
-                <div className="mt-3 space-y-3 pl-[calc(3.5rem+0.75rem)]">
-                  <input
-                    className="w-full border-0 border-b border-hairline bg-transparent py-1.5 text-sm outline-none placeholder:text-muted focus:border-accent"
-                    placeholder="Note…"
-                    value={ex.notes ?? ""}
-                    onChange={(e) =>
-                      onChangeReps(ex.id, { notes: e.target.value })
-                    }
-                  />
-                  <div className="grid grid-cols-4 items-center gap-0 border border-hairline">
-                    <CompactField
-                      label="Set"
-                      value={ex.sets}
-                      onChange={(v) => onChangeReps(ex.id, { sets: v })}
-                    />
-                    <CompactField
-                      label="Rip."
-                      value={ex.reps}
-                      onChange={(v) => onChangeReps(ex.id, { reps: v })}
-                      className="border-l border-hairline"
-                    />
-                    <CompactField
-                      label={weightUnit}
-                      value={ex.targetWeight ?? ""}
-                      optional
-                      onChange={(v) =>
-                        onChangeReps(ex.id, {
-                          targetWeight: v || undefined,
-                        })
-                      }
-                      className="border-l border-hairline"
-                    />
-                    <CompactField
-                      label="Rec."
-                      value={ex.restSeconds}
-                      onChange={(v) =>
-                        onChangeReps(ex.id, { restSeconds: v })
-                      }
-                      className="border-l border-hairline"
-                    />
-                  </div>
-                  {onRemove ? (
-                    <button
-                      type="button"
-                      className="text-sm text-accent touch-manipulation"
-                      onClick={() => onRemove(ex.id)}
-                    >
-                      Rimuovi
-                    </button>
-                  ) : null}
-                </div>
-              )}
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 180, tolerance: 8 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || !onReorder || active.id === over.id) return;
+    onReorder(String(active.id), String(over.id));
+  }
+
+  const rows =
+    type === "reps"
+      ? (exercises as RoutineExerciseReps[]).map((ex) => {
+          const body = (dragHandle: ReactNode | null) => (
+            <RepsRow
+              ex={ex}
+              cat={catalog.find((c) => c.id === ex.exerciseId)}
+              open={editingId === ex.id}
+              onSelect={onSelect}
+              onChangeReps={onChangeReps}
+              onRemove={onRemove}
+              weightUnit={weightUnit}
+              dragHandle={dragHandle}
+            />
+          );
+          return sortable ? (
+            <SortableRow key={ex.id} id={ex.id}>
+              {body}
+            </SortableRow>
+          ) : (
+            <li key={ex.id} className="py-3">
+              {body(null)}
             </li>
           );
-        })}
-      </ul>
-    );
+        })
+      : (exercises as RoutineExerciseTimed[]).map((ex) => {
+          const body = (dragHandle: ReactNode | null) => (
+            <TimedRow
+              ex={ex}
+              cat={catalog.find((c) => c.id === ex.exerciseId)}
+              open={editingId === ex.id}
+              onSelect={onSelect}
+              onChangeTimed={onChangeTimed}
+              onRemove={onRemove}
+              dragHandle={dragHandle}
+            />
+          );
+          return sortable ? (
+            <SortableRow key={ex.id} id={ex.id}>
+              {body}
+            </SortableRow>
+          ) : (
+            <li key={ex.id} className="py-3">
+              {body(null)}
+            </li>
+          );
+        });
+
+  if (!sortable) {
+    return <ul className="divide-y divide-hairline">{rows}</ul>;
   }
 
   return (
-    <ul className="divide-y divide-hairline">
-      {(exercises as RoutineExerciseTimed[]).map((ex) => {
-        const cat = catalog.find((c) => c.id === ex.exerciseId);
-        const open = editingId === ex.id;
-        return (
-          <li key={ex.id} className="py-3">
-            <button
-              type="button"
-              className="flex w-full items-center gap-3 text-left touch-manipulation"
-              onClick={() => onSelect?.(ex.id)}
-              disabled={!onSelect}
-            >
-              <ExerciseThumb
-                size="sm"
-                exerciseId={ex.exerciseId}
-                exerciseName={ex.exerciseName}
-                imagePath={cat?.images[0]}
-                primaryMuscles={cat?.primaryMuscles ?? []}
-                secondaryMuscles={cat?.secondaryMuscles ?? []}
-              />
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-medium">{ex.exerciseName}</div>
-                {!open && (
-                  <div className="text-sm text-muted">
-                    {ex.durationSeconds}s · recupero {ex.restSeconds}s
-                  </div>
-                )}
-              </div>
-              {onSelect ? (
-                <span
-                  className={`text-lg text-muted transition-transform ${
-                    open ? "rotate-0" : "-rotate-90"
-                  }`}
-                  aria-hidden
-                >
-                  ⌄
-                </span>
-              ) : null}
-            </button>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
+    >
+      <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+        <ul className="divide-y divide-hairline">{rows}</ul>
+      </SortableContext>
+    </DndContext>
+  );
+}
 
-            {open && onChangeTimed && (
-              <div className="mt-3 space-y-3 pl-[calc(3.5rem+0.75rem)]">
-                <div className="grid grid-cols-2 items-center gap-0 border border-hairline">
-                  <CompactField
-                    label="Durata"
-                    value={ex.durationSeconds}
-                    onChange={(v) =>
-                      onChangeTimed(ex.id, { durationSeconds: v })
-                    }
-                  />
-                  <CompactField
-                    label="Rec."
-                    value={ex.restSeconds}
-                    onChange={(v) =>
-                      onChangeTimed(ex.id, { restSeconds: v })
-                    }
-                    className="border-l border-hairline"
-                  />
-                </div>
-                {onRemove ? (
-                  <button
-                    type="button"
-                    className="text-sm text-accent touch-manipulation"
-                    onClick={() => onRemove(ex.id)}
-                  >
-                    Rimuovi
-                  </button>
-                ) : null}
+/** Reorder helper for draft/routine arrays. */
+export function reorderByIds<T extends { id: string }>(
+  list: T[],
+  activeId: string,
+  overId: string,
+): T[] {
+  const oldIndex = list.findIndex((e) => e.id === activeId);
+  const newIndex = list.findIndex((e) => e.id === overId);
+  if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return list;
+  return arrayMove(list, oldIndex, newIndex);
+}
+
+function SortableRow({
+  id,
+  children,
+}: {
+  id: string;
+  children: (dragHandle: ReactNode | null) => ReactNode;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 10 : undefined,
+    opacity: isDragging ? 0.92 : undefined,
+    background: isDragging ? "#FAFAF8" : undefined,
+  };
+
+  const dragHandle = (
+    <button
+      type="button"
+      className="flex h-11 w-8 shrink-0 cursor-grab items-center justify-center text-muted touch-manipulation active:cursor-grabbing"
+      aria-label="Trascina per riordinare"
+      {...attributes}
+      {...listeners}
+    >
+      <DragHandleIcon />
+    </button>
+  );
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      className={`py-3 ${isDragging ? "shadow-sm" : ""}`}
+    >
+      {children(dragHandle)}
+    </li>
+  );
+}
+
+function DragHandleIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden
+    >
+      <circle cx="9" cy="7" r="1.5" />
+      <circle cx="15" cy="7" r="1.5" />
+      <circle cx="9" cy="12" r="1.5" />
+      <circle cx="15" cy="12" r="1.5" />
+      <circle cx="9" cy="17" r="1.5" />
+      <circle cx="15" cy="17" r="1.5" />
+    </svg>
+  );
+}
+
+function RepsRow({
+  ex,
+  cat,
+  open,
+  onSelect,
+  onChangeReps,
+  onRemove,
+  weightUnit,
+  dragHandle,
+}: {
+  ex: RoutineExerciseReps;
+  cat?: ExerciseIndexEntry;
+  open: boolean;
+  onSelect?: (id: string) => void;
+  onChangeReps?: (id: string, patch: Partial<RoutineExerciseReps>) => void;
+  onRemove?: (id: string) => void;
+  weightUnit: "kg" | "lb";
+  dragHandle: ReactNode | null;
+}) {
+  return (
+    <>
+      <div className="flex w-full items-center gap-1">
+        {dragHandle}
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-3 text-left touch-manipulation"
+          onClick={() => onSelect?.(ex.id)}
+          disabled={!onSelect}
+        >
+          <ExerciseThumb
+            size="sm"
+            exerciseId={ex.exerciseId}
+            exerciseName={ex.exerciseName}
+            imagePath={cat?.images[0]}
+            primaryMuscles={cat?.primaryMuscles ?? []}
+            secondaryMuscles={cat?.secondaryMuscles ?? []}
+          />
+          <div className="min-w-0 flex-1">
+            <div className="truncate font-medium">{ex.exerciseName}</div>
+            {!open && (
+              <div className="text-sm text-muted">
+                {ex.sets} set · {ex.reps} rip.
+                {ex.targetWeight !== undefined ? ` · ${ex.targetWeight}` : ""}
               </div>
             )}
-          </li>
-        );
-      })}
-    </ul>
+          </div>
+          {onSelect ? (
+            <span
+              className={`text-lg text-muted transition-transform ${
+                open ? "rotate-0" : "-rotate-90"
+              }`}
+              aria-hidden
+            >
+              ⌄
+            </span>
+          ) : null}
+        </button>
+      </div>
+
+      {open && onChangeReps && (
+        <div
+          className={`mt-3 space-y-3 ${
+            dragHandle
+              ? "pl-[calc(2rem+3.5rem+0.75rem)]"
+              : "pl-[calc(3.5rem+0.75rem)]"
+          }`}
+        >
+          <input
+            className="w-full border-0 border-b border-hairline bg-transparent py-1.5 text-sm outline-none placeholder:text-muted focus:border-accent"
+            placeholder="Note…"
+            value={ex.notes ?? ""}
+            onChange={(e) => onChangeReps(ex.id, { notes: e.target.value })}
+          />
+          <div className="grid grid-cols-4 items-center gap-0 border border-hairline">
+            <CompactField
+              label="Set"
+              value={ex.sets}
+              onChange={(v) => onChangeReps(ex.id, { sets: v })}
+            />
+            <CompactField
+              label="Rip."
+              value={ex.reps}
+              onChange={(v) => onChangeReps(ex.id, { reps: v })}
+              className="border-l border-hairline"
+            />
+            <CompactField
+              label={weightUnit}
+              value={ex.targetWeight ?? ""}
+              optional
+              onChange={(v) =>
+                onChangeReps(ex.id, {
+                  targetWeight: v || undefined,
+                })
+              }
+              className="border-l border-hairline"
+            />
+            <CompactField
+              label="Rec."
+              value={ex.restSeconds}
+              onChange={(v) => onChangeReps(ex.id, { restSeconds: v })}
+              className="border-l border-hairline"
+            />
+          </div>
+          {onRemove ? (
+            <button
+              type="button"
+              className="text-sm text-accent touch-manipulation"
+              onClick={() => onRemove(ex.id)}
+            >
+              Rimuovi
+            </button>
+          ) : null}
+        </div>
+      )}
+    </>
+  );
+}
+
+function TimedRow({
+  ex,
+  cat,
+  open,
+  onSelect,
+  onChangeTimed,
+  onRemove,
+  dragHandle,
+}: {
+  ex: RoutineExerciseTimed;
+  cat?: ExerciseIndexEntry;
+  open: boolean;
+  onSelect?: (id: string) => void;
+  onChangeTimed?: (id: string, patch: Partial<RoutineExerciseTimed>) => void;
+  onRemove?: (id: string) => void;
+  dragHandle: ReactNode | null;
+}) {
+  return (
+    <>
+      <div className="flex w-full items-center gap-1">
+        {dragHandle}
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-3 text-left touch-manipulation"
+          onClick={() => onSelect?.(ex.id)}
+          disabled={!onSelect}
+        >
+          <ExerciseThumb
+            size="sm"
+            exerciseId={ex.exerciseId}
+            exerciseName={ex.exerciseName}
+            imagePath={cat?.images[0]}
+            primaryMuscles={cat?.primaryMuscles ?? []}
+            secondaryMuscles={cat?.secondaryMuscles ?? []}
+          />
+          <div className="min-w-0 flex-1">
+            <div className="truncate font-medium">{ex.exerciseName}</div>
+            {!open && (
+              <div className="text-sm text-muted">
+                {ex.durationSeconds}s · recupero {ex.restSeconds}s
+              </div>
+            )}
+          </div>
+          {onSelect ? (
+            <span
+              className={`text-lg text-muted transition-transform ${
+                open ? "rotate-0" : "-rotate-90"
+              }`}
+              aria-hidden
+            >
+              ⌄
+            </span>
+          ) : null}
+        </button>
+      </div>
+
+      {open && onChangeTimed && (
+        <div
+          className={`mt-3 space-y-3 ${
+            dragHandle
+              ? "pl-[calc(2rem+3.5rem+0.75rem)]"
+              : "pl-[calc(3.5rem+0.75rem)]"
+          }`}
+        >
+          <div className="grid grid-cols-2 items-center gap-0 border border-hairline">
+            <CompactField
+              label="Durata"
+              value={ex.durationSeconds}
+              onChange={(v) =>
+                onChangeTimed(ex.id, { durationSeconds: v })
+              }
+            />
+            <CompactField
+              label="Rec."
+              value={ex.restSeconds}
+              onChange={(v) => onChangeTimed(ex.id, { restSeconds: v })}
+              className="border-l border-hairline"
+            />
+          </div>
+          {onRemove ? (
+            <button
+              type="button"
+              className="text-sm text-accent touch-manipulation"
+              onClick={() => onRemove(ex.id)}
+            >
+              Rimuovi
+            </button>
+          ) : null}
+        </div>
+      )}
+    </>
   );
 }
 

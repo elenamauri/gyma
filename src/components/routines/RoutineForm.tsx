@@ -16,6 +16,7 @@ import {
 import {
   RoutineAccordion,
   RoutineExerciseList,
+  reorderByIds,
   useRoutineStats,
 } from "@/components/routines/RoutinePreview";
 import {
@@ -231,6 +232,25 @@ export function RoutineForm({
                 ? draft.repsExercises.findIndex((e) => e.id === id)
                 : draft.timedExercises.findIndex((e) => e.id === id);
             if (idx >= 0) removeAt(idx);
+          }}
+          onReorder={(activeId, overId) => {
+            if (draft.type === "reps") {
+              update({
+                repsExercises: reorderByIds(
+                  draft.repsExercises,
+                  activeId,
+                  overId,
+                ),
+              });
+            } else {
+              update({
+                timedExercises: reorderByIds(
+                  draft.timedExercises,
+                  activeId,
+                  overId,
+                ),
+              });
+            }
           }}
         />
       )}

@@ -137,15 +137,15 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
   const session = sessions.find((s) => s.id === sessionId);
 
   const [exerciseIndex, setExerciseIndex] = useState(0);
-  const [wakeLockOn, setWakeLockOn] = useState(true);
   const [catalog, setCatalog] = useState<ExerciseIndexEntry[]>([]);
   const [pickerMode, setPickerMode] = useState<"replace" | "add" | null>(null);
   const [pickerQuery, setPickerQuery] = useState("");
   const [timedLeft, setTimedLeft] = useState<number | null>(null);
   const [timedRunning, setTimedRunning] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
 
+  const wakeLockOn = settings.wakeLockEnabled !== false;
   useWakeLock(wakeLockOn && session?.status === "active");
 
   const startedAt = session?.startedAt;
@@ -215,11 +215,6 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
     if (!session || !current) return [];
     return previousSetsForExercise(sessions, current.exerciseId, session.id);
   }, [sessions, session, current]);
-
-  const currentCatalog = useMemo(() => {
-    if (!current) return null;
-    return catalog.find((e) => e.id === current.exerciseId) ?? null;
-  }, [catalog, current]);
 
   // Timed auto-advance
   useEffect(() => {
@@ -404,11 +399,12 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
     setPickerQuery("");
   }
 
-  function removeCurrentExercise() {
-    if (!session || !current) return;
-    const exercises = session.exercises.filter((_, i) => i !== exerciseIndex);
+  function removeExerciseAt(index: number) {
+    if (!session) return;
+    const exercises = session.exercises.filter((_, i) => i !== index);
     updateSession({ ...session, exercises });
     setExerciseIndex((i) => Math.max(0, Math.min(i, exercises.length - 1)));
+    setMenuOpenId(null);
   }
 
   if (!session) {
@@ -490,161 +486,170 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
             Aggiungi esercizio
           </Button>
         </div>
-      ) : current ? (
-        <div className="flex flex-1 flex-col gap-4 pt-2">
-          <div className="flex items-start gap-3">
-            <ExerciseThumb
-              size="sm"
-              eager
-              exerciseId={current.exerciseId}
-              exerciseName={current.exerciseName}
-              imagePath={currentCatalog?.images[0]}
-              primaryMuscles={current.primaryMuscles}
-              secondaryMuscles={currentCatalog?.secondaryMuscles}
-            />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-2">
-                <h1 className="font-display text-xl font-bold leading-tight tracking-tight">
-                  {current.exerciseName}
-                </h1>
-                <button
-                  type="button"
-                  className="flex h-9 w-9 shrink-0 items-center justify-center text-muted touch-manipulation"
-                  aria-label="Menu esercizio"
-                  onClick={() => setMenuOpen((v) => !v)}
-                >
-                  ⋯
-                </button>
-              </div>
-              {menuOpen && (
-                <div className="mt-1 flex flex-wrap gap-2 text-sm">
-                  <button
-                    type="button"
-                    className="min-h-10 border border-hairline px-2 text-muted touch-manipulation"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setPickerMode("replace");
-                    }}
-                  >
-                    Sostituisci
-                  </button>
-                  <button
-                    type="button"
-                    className="min-h-10 border border-hairline px-2 text-muted touch-manipulation"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setPickerMode("add");
-                    }}
-                  >
-                    + Esercizio
-                  </button>
-                  <button
-                    type="button"
-                    className="min-h-10 border border-hairline px-2 text-muted touch-manipulation"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      removeCurrentExercise();
-                    }}
-                  >
-                    Rimuovi
-                  </button>
-                </div>
-              )}
-              <input
-                className="mt-2 w-full border-0 border-b border-hairline bg-transparent py-1.5 text-sm outline-none placeholder:text-muted focus:border-accent"
-                placeholder="Note…"
-                value={current.notes ?? ""}
-                onChange={(e) => patchCurrent({ notes: e.target.value })}
-              />
-              <p className="mt-2 text-sm text-muted">
-                Timer di recupero:{" "}
-                <span className={rest.running ? "text-accent" : ""}>
-                  {rest.running
-                    ? formatDuration(rest.remaining)
-                    : current.restSeconds > 0
-                      ? `${current.restSeconds}s`
-                      : "Spento"}
-                </span>
-              </p>
-            </div>
-          </div>
+      ) : (
+        <div className="flex flex-1 flex-col gap-1 pt-2">
+          <ul className="divide-y divide-hairline">
+            {session.exercises.map((ex, i) => {
+              const open = i === exerciseIndex;
+              const done = ex.sets.filter((s) => s.completed).length;
+              const total = ex.sets.length;
+              const cat = catalog.find((c) => c.id === ex.exerciseId);
+              const isCurrent = open && current;
+              const menuOpen = menuOpenId === ex.id;
 
-          {session.type === "timed" ? (
-            <TimedBlock
-              duration={current.durationSeconds ?? 40}
-              left={timedLeft}
-              running={timedRunning}
-              onStart={startTimedBlock}
-              onComplete={completeTimedExercise}
-            />
-          ) : (
-            <SetsBlock
-              exercise={current}
-              unit={settings.unit}
-              previousSets={previousSets}
-              onCompleteSet={completeSet}
-              onAddSet={addSet}
-              onUpdateSet={(setIndex, patch) => {
-                const sets = current.sets.map((s, i) =>
-                  i === setIndex ? { ...s, ...patch } : s,
-                );
-                patchCurrent({ sets });
-              }}
-            />
-          )}
-
-          {/* Upcoming queue */}
-          {session.exercises.length > 1 && (
-            <ul className="mt-2 divide-y divide-hairline border-t border-hairline">
-              {session.exercises.map((ex, i) => {
-                if (i === exerciseIndex) return null;
-                const done = ex.sets.filter((s) => s.completed).length;
-                const total = ex.sets.length;
-                const cat = catalog.find((c) => c.id === ex.exerciseId);
-                return (
-                  <li key={ex.id}>
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-3 py-3 text-left touch-manipulation"
-                      onClick={() => {
-                        setExerciseIndex(i);
-                        setTimedLeft(null);
-                        setTimedRunning(false);
-                        setMenuOpen(false);
-                      }}
-                    >
-                      <ExerciseThumb
-                        size="sm"
-                        exerciseId={ex.exerciseId}
-                        exerciseName={ex.exerciseName}
-                        imagePath={cat?.images[0]}
-                        primaryMuscles={ex.primaryMuscles}
-                        className="!h-12 !w-12"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate font-medium">{ex.exerciseName}</div>
-                        <div className="text-sm text-muted">
-                          {done}/{total} Fatto
-                        </div>
+              return (
+                <li key={ex.id} className="py-3">
+                  <div className="flex items-start gap-3">
+                    <ExerciseThumb
+                      size="sm"
+                      eager={open}
+                      exerciseId={ex.exerciseId}
+                      exerciseName={ex.exerciseName}
+                      imagePath={cat?.images[0]}
+                      primaryMuscles={ex.primaryMuscles}
+                      secondaryMuscles={cat?.secondaryMuscles}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <button
+                          type="button"
+                          className="min-w-0 flex-1 text-left touch-manipulation"
+                          onClick={() => {
+                            setExerciseIndex(i);
+                            setTimedLeft(null);
+                            setTimedRunning(false);
+                            setMenuOpenId(null);
+                          }}
+                        >
+                          <h2
+                            className={`truncate font-display font-bold leading-tight tracking-tight ${
+                              open ? "text-xl" : "text-base font-medium"
+                            }`}
+                          >
+                            {ex.exerciseName}
+                          </h2>
+                          {!open && (
+                            <div className="mt-0.5 text-sm text-muted">
+                              {done}/{total} Fatto
+                            </div>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          className="flex h-9 w-9 shrink-0 items-center justify-center text-muted touch-manipulation"
+                          aria-label="Menu esercizio"
+                          onClick={() =>
+                            setMenuOpenId((id) => (id === ex.id ? null : ex.id))
+                          }
+                        >
+                          ⋯
+                        </button>
                       </div>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
 
-          <label className="mt-2 flex min-h-11 items-center gap-2 text-sm text-muted">
-            <input
-              type="checkbox"
-              checked={wakeLockOn}
-              onChange={(e) => setWakeLockOn(e.target.checked)}
-              className="h-5 w-5 accent-accent"
-            />
-            Schermo sempre acceso
-          </label>
+                      {menuOpen && (
+                        <div className="mt-1 flex flex-wrap gap-2 text-sm">
+                          <button
+                            type="button"
+                            className="min-h-10 border border-hairline px-2 text-muted touch-manipulation"
+                            onClick={() => {
+                              setExerciseIndex(i);
+                              setTimedLeft(null);
+                              setTimedRunning(false);
+                              setMenuOpenId(null);
+                            }}
+                          >
+                            Modifica
+                          </button>
+                          <button
+                            type="button"
+                            className="min-h-10 border border-hairline px-2 text-muted touch-manipulation"
+                            onClick={() => {
+                              setExerciseIndex(i);
+                              setTimedLeft(null);
+                              setTimedRunning(false);
+                              setMenuOpenId(null);
+                              setPickerMode("replace");
+                            }}
+                          >
+                            Sostituisci
+                          </button>
+                          <button
+                            type="button"
+                            className="min-h-10 border border-hairline px-2 text-muted touch-manipulation"
+                            onClick={() => removeExerciseAt(i)}
+                          >
+                            Rimuovi
+                          </button>
+                        </div>
+                      )}
+
+                      {open && isCurrent && (
+                        <>
+                          <input
+                            className="mt-2 w-full border-0 border-b border-hairline bg-transparent py-1.5 text-sm outline-none placeholder:text-muted focus:border-accent"
+                            placeholder="Note…"
+                            value={current.notes ?? ""}
+                            onChange={(e) =>
+                              patchCurrent({ notes: e.target.value })
+                            }
+                          />
+                          <p className="mt-2 text-sm text-muted">
+                            Timer di recupero:{" "}
+                            <span className={rest.running ? "text-accent" : ""}>
+                              {rest.running
+                                ? formatDuration(rest.remaining)
+                                : current.restSeconds > 0
+                                  ? `${current.restSeconds}s`
+                                  : "Spento"}
+                            </span>
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {open && isCurrent && (
+                    <div className="mt-4">
+                      {session.type === "timed" ? (
+                        <TimedBlock
+                          duration={current.durationSeconds ?? 40}
+                          left={timedLeft}
+                          running={timedRunning}
+                          onStart={startTimedBlock}
+                          onComplete={completeTimedExercise}
+                        />
+                      ) : (
+                        <SetsBlock
+                          exercise={current}
+                          unit={settings.unit}
+                          previousSets={previousSets}
+                          onCompleteSet={completeSet}
+                          onAddSet={addSet}
+                          onUpdateSet={(setIndex, patch) => {
+                            const sets = current.sets.map((s, idx) =>
+                              idx === setIndex ? { ...s, ...patch } : s,
+                            );
+                            patchCurrent({ sets });
+                          }}
+                        />
+                      )}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+
+          <Button
+            type="button"
+            variant="ghost"
+            className="mt-4 w-full"
+            onClick={() => setPickerMode("add")}
+          >
+            + Aggiungi esercizio
+          </Button>
         </div>
-      ) : null}
+      )}
 
       {pickerMode && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 sm:items-center">

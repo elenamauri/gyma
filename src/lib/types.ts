@@ -128,6 +128,8 @@ export interface Settings {
   defaultRestSeconds: number;
   soundEnabled: boolean;
   vibrationEnabled: boolean;
+  /** Keep screen on during live workout (default on). */
+  wakeLockEnabled: boolean;
   /** Nome mostrato in dashboard (“Ciao …”). */
   displayName?: string;
 }
@@ -155,6 +157,7 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultRestSeconds: 90,
   soundEnabled: true,
   vibrationEnabled: true,
+  wakeLockEnabled: true,
 };
 
 export const IMAGE_BASE =

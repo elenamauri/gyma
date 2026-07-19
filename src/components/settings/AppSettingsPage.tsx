@@ -139,6 +139,17 @@ export function AppSettingsPage() {
           />
           Vibrazione a fine recupero
         </label>
+        <label className="flex min-h-11 items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={settings.wakeLockEnabled !== false}
+            onChange={(e) =>
+              updateSettings({ wakeLockEnabled: e.target.checked })
+            }
+            className="h-5 w-5 accent-accent"
+          />
+          Schermo sempre acceso in allenamento
+        </label>
       </section>
 
       <section className="space-y-4">

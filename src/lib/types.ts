@@ -63,6 +63,17 @@ export interface Routine {
   name: string;
   type: RoutineType;
   exercises: RoutineExerciseReps[] | RoutineExerciseTimed[];
+  /** Parent program (required for new routines; migrated for legacy). */
+  programId: string;
+  /** Tile color hex for program grid. */
+  color: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Program {
+  id: string;
+  name: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -135,6 +146,7 @@ export interface Settings {
 }
 
 export interface AppData {
+  programs: Program[];
   routines: Routine[];
   sessions: Session[];
   bodyweightLog: BodyweightEntry[];
@@ -144,6 +156,7 @@ export interface AppData {
 }
 
 export const STORAGE_KEYS = {
+  programs: "gyma:programs",
   routines: "gyma:routines",
   sessions: "gyma:sessions",
   bodyweightLog: "gyma:bodyweightLog",
@@ -151,6 +164,18 @@ export const STORAGE_KEYS = {
   recentExerciseIds: "gyma:recentExerciseIds",
   settings: "gyma:settings",
 } as const;
+
+/** Palette for routine tiles inside a program. */
+export const ROUTINE_COLORS = [
+  "#E1442C",
+  "#2C5EE1",
+  "#1A9E6A",
+  "#D97706",
+  "#7C3AED",
+  "#0D9488",
+  "#DB2777",
+  "#4B5563",
+] as const;
 
 export const DEFAULT_SETTINGS: Settings = {
   unit: "kg",

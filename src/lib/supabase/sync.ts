@@ -9,6 +9,7 @@ export interface CloudSnapshot {
 
 function emptyPayload(): AppData {
   return {
+    programs: [],
     routines: [],
     sessions: [],
     bodyweightLog: [],
@@ -39,6 +40,9 @@ export async function fetchCloudData(): Promise<CloudSnapshot | null> {
   const payload = {
     ...emptyPayload(),
     ...(data.payload as Partial<AppData>),
+    programs: Array.isArray((data.payload as Partial<AppData>)?.programs)
+      ? ((data.payload as Partial<AppData>).programs as AppData["programs"])
+      : [],
     settings: {
       ...DEFAULT_SETTINGS,
       ...((data.payload as Partial<AppData>)?.settings ?? {}),
@@ -81,10 +85,12 @@ export function shouldPreferCloud(
 ): boolean {
   if (!cloud) return false;
   const cloudHas =
+    cloud.payload.programs.length > 0 ||
     cloud.payload.routines.length > 0 ||
     cloud.payload.sessions.length > 0 ||
     cloud.payload.bodyweightLog.length > 0;
   const localHas =
+    local.programs.length > 0 ||
     local.routines.length > 0 ||
     local.sessions.length > 0 ||
     local.bodyweightLog.length > 0;

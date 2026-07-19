@@ -7,7 +7,7 @@ import type {
   RoutineExerciseTimed,
   RoutineType,
 } from "@/lib/types";
-import { uid } from "@/lib/storage";
+import { pickRoutineColor, uid } from "@/lib/storage";
 
 const DRAFT_KEY = "gyma:routineDraft";
 
@@ -15,6 +15,8 @@ export interface RoutineDraft {
   id?: string;
   name: string;
   type: RoutineType;
+  programId: string;
+  color?: string;
   repsExercises: RoutineExerciseReps[];
   timedExercises: RoutineExerciseTimed[];
   createdAt?: string;
@@ -23,12 +25,18 @@ export interface RoutineDraft {
   wizardStep?: 1 | 2;
 }
 
-export function emptyDraft(returnPath: string, initial?: Routine): RoutineDraft {
+export function emptyDraft(
+  returnPath: string,
+  initial?: Routine,
+  programId?: string,
+): RoutineDraft {
   if (initial) {
     return {
       id: initial.id,
       name: initial.name,
       type: initial.type,
+      programId: initial.programId,
+      color: initial.color,
       repsExercises:
         initial.type === "reps"
           ? (initial.exercises as RoutineExerciseReps[])
@@ -45,6 +53,7 @@ export function emptyDraft(returnPath: string, initial?: Routine): RoutineDraft 
   return {
     name: "",
     type: "reps",
+    programId: programId ?? "",
     repsExercises: [],
     timedExercises: [],
     returnPath,
@@ -76,12 +85,20 @@ export function clearDraft() {
 export function ensureDraft(
   returnPath: string,
   initial?: Routine,
+  programId?: string,
 ): RoutineDraft {
   const existing = loadDraft();
   if (existing && existing.returnPath === returnPath) {
-    if (!initial || existing.id === initial.id) return existing;
+    if (!initial || existing.id === initial.id) {
+      if (programId && !existing.programId) {
+        const patched = { ...existing, programId };
+        saveDraft(patched);
+        return patched;
+      }
+      return existing;
+    }
   }
-  const draft = emptyDraft(returnPath, initial);
+  const draft = emptyDraft(returnPath, initial, programId);
   saveDraft(draft);
   return draft;
 }
@@ -155,10 +172,13 @@ export function draftExerciseCount(draft: RoutineDraft) {
 
 export function draftToRoutine(draft: RoutineDraft): Routine {
   const now = new Date().toISOString();
+  const id = draft.id ?? uid();
   return {
-    id: draft.id ?? uid(),
+    id,
     name: draft.name.trim(),
     type: draft.type,
+    programId: draft.programId,
+    color: draft.color || pickRoutineColor(id),
     exercises:
       draft.type === "reps" ? draft.repsExercises : draft.timedExercises,
     createdAt: draft.createdAt ?? now,

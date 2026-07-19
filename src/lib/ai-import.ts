@@ -6,7 +6,7 @@ import type {
   RoutineExerciseTimed,
 } from "./types";
 import { fuzzyMatchExerciseName } from "./exercises";
-import { uid } from "./storage";
+import { pickRoutineColor, uid } from "./storage";
 
 export interface ResolvedImportExercise {
   importedName: string;
@@ -102,6 +102,7 @@ export function buildRoutineFromResolved(
   name: string,
   type: "reps" | "timed",
   resolved: ResolvedImportExercise[],
+  programId: string,
 ): Routine | { error: string } {
   const incomplete = resolved.find((r) => !r.exerciseId || !r.exerciseName);
   if (incomplete) {
@@ -109,8 +110,12 @@ export function buildRoutineFromResolved(
       error: `Seleziona un esercizio per "${incomplete.importedName}" prima di salvare.`,
     };
   }
+  if (!programId) {
+    return { error: "Seleziona un programma prima di salvare." };
+  }
 
   const now = new Date().toISOString();
+  const id = uid();
 
   if (type === "reps") {
     const exercises: RoutineExerciseReps[] = resolved.map((r) => ({
@@ -123,9 +128,11 @@ export function buildRoutineFromResolved(
       targetWeight: r.targetWeight,
     }));
     return {
-      id: uid(),
+      id,
       name,
       type,
+      programId,
+      color: pickRoutineColor(id),
       exercises,
       createdAt: now,
       updatedAt: now,
@@ -141,9 +148,11 @@ export function buildRoutineFromResolved(
   }));
 
   return {
-    id: uid(),
+    id,
     name,
     type,
+    programId,
+    color: pickRoutineColor(id),
     exercises,
     createdAt: now,
     updatedAt: now,

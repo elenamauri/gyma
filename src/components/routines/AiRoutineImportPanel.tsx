@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AI_ROUTINE_PROMPT } from "@/lib/ai";
 import {
   buildRoutineFromResolved,
@@ -12,17 +12,24 @@ import {
 import { useAppStore } from "@/lib/store";
 import { useExerciseCatalog } from "@/hooks/useExerciseCatalog";
 import { Button, Textarea, Label, Select } from "@/components/ui/primitives";
+import Link from "next/link";
 
 export function AiRoutineImportPanel() {
   const router = useRouter();
-  const { upsertRoutine } = useAppStore();
+  const params = useSearchParams();
+  const { upsertRoutine, programs } = useAppStore();
   const { exercises, loading } = useExerciseCatalog();
   const [raw, setRaw] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [resolved, setResolved] = useState<ResolvedImportExercise[] | null>(null);
+  const [resolved, setResolved] = useState<ResolvedImportExercise[] | null>(
+    null,
+  );
   const [importName, setImportName] = useState("");
   const [importType, setImportType] = useState<"reps" | "timed">("reps");
+  const [programId, setProgramId] = useState(
+    () => params.get("programId") || programs[0]?.id || "",
+  );
 
   async function copyPrompt() {
     await navigator.clipboard.writeText(AI_ROUTINE_PROMPT);
@@ -50,13 +57,38 @@ export function AiRoutineImportPanel() {
 
   function save() {
     if (!resolved) return;
-    const built = buildRoutineFromResolved(importName, importType, resolved);
+    const pid = programId || programs[0]?.id;
+    if (!pid) {
+      setError("Crea prima un programma, poi importa la routine.");
+      return;
+    }
+    const built = buildRoutineFromResolved(
+      importName,
+      importType,
+      resolved,
+      pid,
+    );
     if ("error" in built) {
       setError(built.error);
       return;
     }
     upsertRoutine(built);
-    router.push("/routines");
+    router.push(`/routines/programs/${pid}`);
+  }
+
+  if (programs.length === 0) {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-muted">
+          Per importare una routine serve almeno un programma.
+        </p>
+        <Link href="/routines/programs/new">
+          <Button type="button" variant="accent">
+            Crea programma
+          </Button>
+        </Link>
+      </div>
+    );
   }
 
   return (
@@ -65,6 +97,22 @@ export function AiRoutineImportPanel() {
         Copia il prompt, chiedi a Claude una routine, poi incolla il JSON qui.
         I nomi vengono abbinati al catalogo con fuzzy matching.
       </p>
+
+      <div>
+        <Label htmlFor="import-program">Programma</Label>
+        <Select
+          id="import-program"
+          value={programId || programs[0]?.id}
+          onChange={(e) => setProgramId(e.target.value)}
+        >
+          {programs.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </Select>
+      </div>
+
       <div className="flex flex-wrap gap-2">
         <Button type="button" variant="ghost" onClick={copyPrompt}>
           {copied ? "Prompt copiato" : "Copia prompt per Claude"}
@@ -81,7 +129,11 @@ export function AiRoutineImportPanel() {
           className="font-mono text-xs"
         />
       </div>
-      <Button type="button" onClick={validateAndMatch} disabled={loading || !raw.trim()}>
+      <Button
+        type="button"
+        onClick={validateAndMatch}
+        disabled={loading || !raw.trim()}
+      >
         Valida e abbina
       </Button>
       {error && <p className="text-sm text-accent">{error}</p>}
@@ -95,7 +147,8 @@ export function AiRoutineImportPanel() {
             {resolved.map((item, idx) => (
               <li key={`${item.importedName}-${idx}`} className="space-y-2 py-3">
                 <div className="text-sm">
-                  Importato: <span className="font-mono">{item.importedName}</span>
+                  Importato:{" "}
+                  <span className="font-mono">{item.importedName}</span>
                 </div>
                 {item.exerciseId && !item.needsManualPick ? (
                   <div className="text-sm text-muted">

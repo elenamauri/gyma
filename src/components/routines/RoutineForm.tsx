@@ -30,28 +30,34 @@ import {
 export function RoutineForm({
   initial,
   returnPath,
+  programId,
 }: {
   initial?: Routine;
   returnPath: string;
+  programId?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { upsertRoutine, settings } = useAppStore();
+  const { upsertRoutine, settings, programs } = useAppStore();
   const { exercises } = useExerciseCatalog();
   const [draft, setDraft] = useState<RoutineDraft | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  const resolvedProgramId =
+    programId || initial?.programId || programs[0]?.id || "";
 
   useEffect(() => {
     const existing = loadDraft();
     if (existing && existing.returnPath === returnPath) {
       setDraft({
         ...existing,
+        programId: existing.programId || resolvedProgramId,
         wizardStep: existing.wizardStep ?? (existing.name.trim() ? 2 : 1),
       });
       return;
     }
-    setDraft(ensureDraft(returnPath, initial));
-  }, [returnPath, initial, pathname]);
+    setDraft(ensureDraft(returnPath, initial, resolvedProgramId));
+  }, [returnPath, initial, pathname, resolvedProgramId]);
 
   function update(patch: Partial<RoutineDraft>) {
     setDraft((prev) => {
@@ -92,9 +98,17 @@ export function RoutineForm({
     const list =
       draft.type === "reps" ? draft.repsExercises : draft.timedExercises;
     if (list.length === 0) return;
-    upsertRoutine(draftToRoutine(draft));
+    if (!draft.programId) {
+      update({ programId: resolvedProgramId });
+      if (!resolvedProgramId) return;
+    }
+    const routine = draftToRoutine({
+      ...draft,
+      programId: draft.programId || resolvedProgramId,
+    });
+    upsertRoutine(routine);
     clearDraft();
-    router.push("/routines");
+    router.push(`/routines/programs/${routine.programId}`);
   }
 
   const list =

@@ -32,7 +32,7 @@ export default function RoutineDetailPage() {
         description="Potrebbe essere stata eliminata."
         action={
           <Link href="/routines">
-            <Button>Torna alle routine</Button>
+            <Button>Torna ai programmi</Button>
           </Link>
         }
       />
@@ -80,7 +80,11 @@ export default function RoutineDetailPage() {
         onClick={() => {
           if (confirm("Eliminare questa routine?")) {
             deleteRoutine(routine.id);
-            router.push("/routines");
+            router.push(
+              routine.programId
+                ? `/routines/programs/${routine.programId}`
+                : "/routines",
+            );
           }
         }}
       >

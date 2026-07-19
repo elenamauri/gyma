@@ -23,8 +23,15 @@ import { computeStreak, toDateKey } from "@/lib/utils";
 export function DashboardHome() {
   const router = useRouter();
   const { user } = useAuth();
-  const { ready, routines, sessions, settings, bodyweightLog, upsertSession } =
-    useAppStore();
+  const {
+    ready,
+    routines,
+    programs,
+    sessions,
+    settings,
+    bodyweightLog,
+    upsertSession,
+  } = useAppStore();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [startOpen, setStartOpen] = useState(false);
 
@@ -274,6 +281,7 @@ export function DashboardHome() {
 
       {startOpen && (
         <StartWorkoutSheet
+          programs={programs}
           routines={routines}
           onClose={() => setStartOpen(false)}
           onFree={startEmpty}
@@ -302,21 +310,31 @@ function Stat({
 }
 
 function StartWorkoutSheet({
+  programs,
   routines,
   onClose,
   onFree,
   onRoutine,
 }: {
+  programs: Array<{ id: string; name: string }>;
   routines: Array<{
     id: string;
     name: string;
     type: string;
+    programId: string;
     exercises: unknown[];
   }>;
   onClose: () => void;
   onFree: () => void;
   onRoutine: (id: string) => void;
 }) {
+  const grouped = programs
+    .map((p) => ({
+      program: p,
+      routines: routines.filter((r) => r.programId === p.id),
+    }))
+    .filter((g) => g.routines.length > 0);
+
   return (
     <div className="fixed inset-0 z-[60] flex flex-col justify-end">
       <button
@@ -367,40 +385,49 @@ function StartWorkoutSheet({
               className="text-xs text-muted hover:text-ink"
               onClick={onClose}
             >
-              Tutte
+              Programmi
             </Link>
           </div>
-          {routines.length === 0 ? (
+          {grouped.length === 0 ? (
             <EmptyState
               title="Nessuna routine"
-              description="Crea una routine per avviarla da qui."
+              description="Crea un programma e aggiungi le routine."
               action={
-                <Link href="/routines/new" onClick={onClose}>
-                  <Button type="button">Crea routine</Button>
+                <Link href="/routines/programs/new" onClick={onClose}>
+                  <Button type="button">Crea programma</Button>
                 </Link>
               }
             />
           ) : (
-            <ul className="max-h-64 divide-y divide-hairline overflow-y-auto">
-              {routines.map((r) => (
-                <li key={r.id}>
-                  <button
-                    type="button"
-                    onClick={() => onRoutine(r.id)}
-                    className="flex w-full items-center justify-between gap-3 py-3 text-left touch-manipulation hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate font-medium">{r.name}</div>
-                      <div className="text-xs text-muted">
-                        {r.type === "reps" ? "Serie/reps" : "A tempo"} ·{" "}
-                        {r.exercises.length} esercizi
-                      </div>
-                    </div>
-                    <span className="text-sm text-accent">Avvia</span>
-                  </button>
-                </li>
+            <div className="max-h-72 space-y-4 overflow-y-auto">
+              {grouped.map(({ program, routines: list }) => (
+                <div key={program.id}>
+                  <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">
+                    {program.name}
+                  </div>
+                  <ul className="divide-y divide-hairline">
+                    {list.map((r) => (
+                      <li key={r.id}>
+                        <button
+                          type="button"
+                          onClick={() => onRoutine(r.id)}
+                          className="flex w-full items-center justify-between gap-3 py-3 text-left touch-manipulation hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+                        >
+                          <div className="min-w-0">
+                            <div className="truncate font-medium">{r.name}</div>
+                            <div className="text-xs text-muted">
+                              {r.type === "reps" ? "Serie/reps" : "A tempo"} ·{" "}
+                              {r.exercises.length} esercizi
+                            </div>
+                          </div>
+                          <span className="text-sm text-accent">Avvia</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </div>
       </div>

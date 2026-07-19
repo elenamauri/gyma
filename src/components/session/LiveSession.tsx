@@ -327,7 +327,7 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
     completed.prs = detectPRs(completed, previous);
     updateSession(completed);
     localStorage.removeItem(ACTIVE_KEY);
-    router.push(`/history/${completed.id}`);
+    router.push(`/history/${completed.id}?done=1`);
   }
 
   function abandonSession() {

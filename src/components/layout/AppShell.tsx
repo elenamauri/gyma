@@ -17,7 +17,7 @@ const TABS = [
   },
   {
     href: "/routines",
-    label: "Routine",
+    label: "Programmi",
     match: (path: string) => path.startsWith("/routines"),
     icon: IconRoutine,
   },
@@ -33,6 +33,7 @@ const TABS = [
 function resolveChrome(
   pathname: string,
   returnTo: string | null,
+  programId: string | null = null,
 ): {
   title: string;
   backHref?: string;
@@ -43,17 +44,28 @@ function resolveChrome(
   if (pathname === "/") return { title: "" };
   if (pathname === "/routines") {
     return {
-      title: "Routine",
+      title: "Programmi",
       rightHref: "/routines/import",
       rightLabel: "Import da Claude",
       rightIcon: "import",
     };
   }
+  if (pathname === "/routines/programs/new") {
+    return { title: "Nuovo programma", backHref: "/routines" };
+  }
+  if (/^\/routines\/programs\/[^/]+$/.test(pathname)) {
+    return { title: "Programma", backHref: "/routines" };
+  }
   if (pathname === "/routines/import") {
     return { title: "Import AI", backHref: "/routines" };
   }
   if (pathname === "/routines/new") {
-    return { title: "Nuova routine", backHref: "/routines" };
+    return {
+      title: "Nuova routine",
+      backHref: programId
+        ? `/routines/programs/${programId}`
+        : "/routines",
+    };
   }
   if (pathname === "/routines/pick") {
     return {
@@ -74,7 +86,7 @@ function resolveChrome(
   }
   if (pathname === "/history") return { title: "Storico", backHref: "/" };
   if (/^\/history\//.test(pathname)) {
-    return { title: "Sessione", backHref: "/history" };
+    return { title: "Riepilogo", backHref: "/history" };
   }
   if (pathname === "/progress") return { title: "Progressi", backHref: "/" };
   if (pathname === "/settings/preferences") {
@@ -173,6 +185,7 @@ function AppTopBar() {
   const { title, backHref, rightHref, rightLabel, rightIcon } = resolveChrome(
     pathname,
     params.get("return"),
+    params.get("programId"),
   );
 
   return (

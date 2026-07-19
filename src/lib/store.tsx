@@ -13,6 +13,7 @@ import {
 import type {
   AppData,
   BodyweightEntry,
+  Program,
   Routine,
   Session,
   Settings,
@@ -23,6 +24,7 @@ import {
   getAllData,
   importAllData,
   saveBodyweightLog,
+  savePrograms,
   saveRecentExerciseIds,
   saveRoutines,
   saveSessions,
@@ -41,6 +43,7 @@ type SyncStatus = "idle" | "syncing" | "synced" | "error" | "offline";
 
 interface AppStoreValue {
   ready: boolean;
+  programs: Program[];
   routines: Routine[];
   sessions: Session[];
   bodyweightLog: BodyweightEntry[];
@@ -50,6 +53,9 @@ interface AppStoreValue {
   syncStatus: SyncStatus;
   syncError: string | null;
   lastSyncedAt: string | null;
+  setPrograms: (programs: Program[]) => void;
+  upsertProgram: (program: Program) => void;
+  deleteProgram: (id: string) => void;
   setRoutines: (routines: Routine[]) => void;
   upsertRoutine: (routine: Routine) => void;
   deleteRoutine: (id: string) => void;
@@ -71,6 +77,7 @@ const AppStoreContext = createContext<AppStoreValue | null>(null);
 export function AppStoreProvider({ children }: { children: ReactNode }) {
   const { user, ready: authReady, configured } = useAuth();
   const [ready, setReady] = useState(false);
+  const [programs, setProgramsState] = useState<Program[]>([]);
   const [routines, setRoutinesState] = useState<Routine[]>([]);
   const [sessions, setSessionsState] = useState<Session[]>([]);
   const [bodyweightLog, setBodyweightState] = useState<BodyweightEntry[]>([]);
@@ -84,6 +91,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const hydratedUser = useRef<string | null>(null);
 
   const applyData = useCallback((data: AppData) => {
+    setProgramsState(data.programs ?? []);
     setRoutinesState(data.routines);
     setSessionsState(data.sessions);
     setBodyweightState(data.bodyweightLog);
@@ -169,7 +177,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
         if (shouldPreferCloud(local, cloud) && cloud) {
           importAllData(cloud.payload);
-          applyData(cloud.payload);
+          applyData(getAllData());
           setLastSyncedAt(cloud.updatedAt);
           setSyncStatus("synced");
         } else {
@@ -195,6 +203,47 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       if (syncTimer.current) clearTimeout(syncTimer.current);
     };
   }, []);
+
+  const setPrograms = useCallback(
+    (next: Program[]) => {
+      setProgramsState(next);
+      persistAndSync(() => savePrograms(next));
+    },
+    [persistAndSync],
+  );
+
+  const upsertProgram = useCallback(
+    (program: Program) => {
+      setProgramsState((prev) => {
+        const idx = prev.findIndex((p) => p.id === program.id);
+        const next =
+          idx >= 0
+            ? prev.map((p) => (p.id === program.id ? program : p))
+            : [program, ...prev];
+        persistAndSync(() => savePrograms(next));
+        return next;
+      });
+    },
+    [persistAndSync],
+  );
+
+  const deleteProgram = useCallback(
+    (id: string) => {
+      setProgramsState((prevPrograms) => {
+        const nextPrograms = prevPrograms.filter((p) => p.id !== id);
+        setRoutinesState((prevRoutines) => {
+          const nextRoutines = prevRoutines.filter((r) => r.programId !== id);
+          persistAndSync(() => {
+            savePrograms(nextPrograms);
+            saveRoutines(nextRoutines);
+          });
+          return nextRoutines;
+        });
+        return nextPrograms;
+      });
+    },
+    [persistAndSync],
+  );
 
   const setRoutines = useCallback(
     (next: Routine[]) => {
@@ -322,6 +371,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AppStoreValue>(
     () => ({
       ready,
+      programs,
       routines,
       sessions,
       bodyweightLog,
@@ -331,6 +381,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       syncStatus,
       syncError,
       lastSyncedAt,
+      setPrograms,
+      upsertProgram,
+      deleteProgram,
       setRoutines,
       upsertRoutine,
       deleteRoutine,
@@ -348,6 +401,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     }),
     [
       ready,
+      programs,
       routines,
       sessions,
       bodyweightLog,
@@ -357,6 +411,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       syncStatus,
       syncError,
       lastSyncedAt,
+      setPrograms,
+      upsertProgram,
+      deleteProgram,
       setRoutines,
       upsertRoutine,
       deleteRoutine,

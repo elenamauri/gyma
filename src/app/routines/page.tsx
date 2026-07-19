@@ -1,59 +1,80 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 
 export default function RoutinesPage() {
-  const { ready, routines } = useAppStore();
+  const { ready, programs, routines } = useAppStore();
+
+  const sorted = useMemo(
+    () =>
+      [...programs].sort(
+        (a, b) =>
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      ),
+    [programs],
+  );
+
+  const counts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of routines) {
+      map.set(r.programId, (map.get(r.programId) ?? 0) + 1);
+    }
+    return map;
+  }, [routines]);
 
   if (!ready) {
     return <p className="text-sm text-muted">Caricamento…</p>;
   }
 
-  const sorted = [...routines].sort(
-    (a, b) =>
-      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-  );
-
   return (
-    <ul className="divide-y divide-hairline">
-      <li>
-        <Link
-          href="/routines/new"
-          className="flex min-h-16 items-center gap-3 py-4 text-muted hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          <span
-            className="flex h-10 w-10 shrink-0 items-center justify-center border border-dashed border-hairline text-xl leading-none"
-            aria-hidden
-          >
-            +
-          </span>
-          <div className="min-w-0">
-            <div className="font-medium text-ink">Nuova routine</div>
-            <div className="text-xs text-muted">Crea da zero</div>
-          </div>
-        </Link>
-      </li>
+    <div className="space-y-4">
+      <p className="text-sm text-muted">
+        I programmi raccolgono le tue routine (es. Abs A / Abs B).
+      </p>
 
-      {sorted.map((r) => (
-        <li key={r.id}>
+      <ul className="grid grid-cols-2 gap-3">
+        <li>
           <Link
-            href={`/routines/${r.id}`}
-            className="flex min-h-16 items-center justify-between gap-3 py-4 hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            href="/routines/programs/new"
+            className="flex aspect-square flex-col items-center justify-center gap-2 border border-dashed border-hairline text-muted touch-manipulation hover:border-ink hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
-            <div className="min-w-0">
-              <div className="truncate font-medium">{r.name}</div>
-              <div className="text-xs text-muted">
-                {r.type === "reps" ? "Serie/reps" : "A tempo"} ·{" "}
-                {r.exercises.length} esercizi
-              </div>
-            </div>
-            <span className="text-muted" aria-hidden>
-              →
+            <span className="text-3xl leading-none" aria-hidden>
+              +
+            </span>
+            <span className="px-2 text-center text-xs font-medium uppercase tracking-wide">
+              Nuovo programma
             </span>
           </Link>
         </li>
-      ))}
-    </ul>
+
+        {sorted.map((p, index) => {
+          const n = counts.get(p.id) ?? 0;
+          return (
+            <li key={p.id}>
+              <Link
+                href={`/routines/programs/${p.id}`}
+                className="flex aspect-square flex-col overflow-hidden border border-hairline bg-white touch-manipulation hover:border-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                <div className="flex flex-1 items-center justify-center bg-white">
+                  <span className="font-display text-5xl font-bold tabular-nums text-ink">
+                    {index + 1}
+                  </span>
+                </div>
+                <div className="border-t border-hairline bg-chalk px-2.5 py-2">
+                  <div className="truncate text-sm font-medium text-ink">
+                    {p.name}
+                  </div>
+                  <div className="text-[11px] text-muted">
+                    {n} {n === 1 ? "routine" : "routine"}
+                  </div>
+                </div>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }

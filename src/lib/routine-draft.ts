@@ -158,6 +158,43 @@ export function removeExerciseFromDraft(
   return next;
 }
 
+export function replaceExerciseInDraft(
+  draft: RoutineDraft,
+  rowId: string,
+  ex: ExerciseIndexEntry,
+): RoutineDraft {
+  if (draft.type === "reps") {
+    const next: RoutineDraft = {
+      ...draft,
+      repsExercises: draft.repsExercises.map((row) =>
+        row.id === rowId
+          ? {
+              ...row,
+              exerciseId: ex.id,
+              exerciseName: ex.name,
+            }
+          : row,
+      ),
+    };
+    saveDraft(next);
+    return next;
+  }
+  const next: RoutineDraft = {
+    ...draft,
+    timedExercises: draft.timedExercises.map((row) =>
+      row.id === rowId
+        ? {
+            ...row,
+            exerciseId: ex.id,
+            exerciseName: ex.name,
+          }
+        : row,
+    ),
+  };
+  saveDraft(next);
+  return next;
+}
+
 export function draftHasExercise(draft: RoutineDraft, exerciseId: string) {
   const list =
     draft.type === "reps" ? draft.repsExercises : draft.timedExercises;

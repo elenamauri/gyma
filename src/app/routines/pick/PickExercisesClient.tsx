@@ -16,6 +16,7 @@ import {
   draftHasExercise,
   loadDraft,
   removeExerciseFromDraft,
+  replaceExerciseInDraft,
   type RoutineDraft,
 } from "@/lib/routine-draft";
 import { MuscleMap } from "@/components/exercises/MuscleMap";
@@ -65,6 +66,7 @@ export default function PickExercisesClient() {
   const router = useRouter();
   const params = useSearchParams();
   const returnTo = params.get("return") || "/routines/new";
+  const replaceRowId = params.get("replace");
   const { settings, recentExerciseIds, favorites, toggleFavorite } =
     useAppStore();
   const { exercises, fuse, loading } = useExerciseCatalog();
@@ -135,7 +137,13 @@ export default function PickExercisesClient() {
     !query && muscleChip === "all" && recentItems.length > 0;
 
   function add(ex: ExerciseIndexEntry) {
-    if (!draft || draftHasExercise(draft, ex.id)) return;
+    if (!draft) return;
+    if (replaceRowId) {
+      setDraft(replaceExerciseInDraft(draft, replaceRowId, ex));
+      router.push(returnTo);
+      return;
+    }
+    if (draftHasExercise(draft, ex.id)) return;
     setDraft(addExerciseToDraft(draft, ex, settings.defaultRestSeconds));
   }
 
@@ -163,8 +171,16 @@ export default function PickExercisesClient() {
           autoComplete="off"
           className="min-w-0 flex-1"
         />
-        <Mono className="min-w-[2ch] shrink-0 text-sm text-accent">{count}</Mono>
+        {!replaceRowId && (
+          <Mono className="min-w-[2ch] shrink-0 text-sm text-accent">{count}</Mono>
+        )}
       </div>
+
+      {replaceRowId ? (
+        <p className="text-sm text-muted">
+          Scegli l’esercizio sostitutivo, poi conferma con + o dall’anteprima.
+        </p>
+      ) : null}
 
       {/* Muscle carousel */}
       <div className="-mx-4 overflow-x-auto px-4">
@@ -209,6 +225,7 @@ export default function PickExercisesClient() {
             onAdd={add}
             onRemove={remove}
             onToggleFav={toggleFavorite}
+            replaceMode={!!replaceRowId}
           />
         </section>
       )}
@@ -228,6 +245,7 @@ export default function PickExercisesClient() {
           onAdd={add}
           onRemove={remove}
           onToggleFav={toggleFavorite}
+          replaceMode={!!replaceRowId}
         />
       </section>
 
@@ -239,7 +257,7 @@ export default function PickExercisesClient() {
             className="w-full"
             onClick={() => router.push(returnTo)}
           >
-            Fatto · {count} selezionati
+            {replaceRowId ? "Annulla" : `Fatto · ${count} selezionati`}
           </Button>
         </div>
       </div>
@@ -248,7 +266,10 @@ export default function PickExercisesClient() {
         <PreviewSheet
           indexEntry={previewIndex}
           full={previewFull}
-          selected={draftHasExercise(draft, previewId)}
+          selected={
+            replaceRowId ? false : draftHasExercise(draft, previewId)
+          }
+          replaceMode={!!replaceRowId}
           onClose={() => setPreviewId(null)}
           onAdd={() => add(previewIndex)}
           onRemove={() => remove(previewId)}
@@ -266,6 +287,7 @@ function ExerciseGrid({
   onAdd,
   onRemove,
   onToggleFav,
+  replaceMode = false,
 }: {
   items: ExerciseIndexEntry[];
   draft: RoutineDraft;
@@ -274,11 +296,12 @@ function ExerciseGrid({
   onAdd: (ex: ExerciseIndexEntry) => void;
   onRemove: (id: string) => void;
   onToggleFav: (id: string) => void;
+  replaceMode?: boolean;
 }) {
   return (
     <ul className="grid grid-cols-2 gap-3">
       {items.map((ex) => {
-        const selected = draftHasExercise(draft, ex.id);
+        const selected = !replaceMode && draftHasExercise(draft, ex.id);
         const fav = favorites.includes(ex.id);
         return (
           <li key={ex.id} className="border border-hairline bg-ink/[0.02]">
@@ -290,6 +313,7 @@ function ExerciseGrid({
                 aria-label={`Anteprima ${ex.name}`}
               >
                 <ExerciseThumb
+                  link={false}
                   exerciseId={ex.id}
                   exerciseName={ex.name}
                   imagePath={ex.images[0]}
@@ -308,14 +332,6 @@ function ExerciseGrid({
                 }`}
               >
                 {fav ? "★" : "☆"}
-              </button>
-              <button
-                type="button"
-                aria-label="Dettagli"
-                onClick={() => onPreview(ex.id)}
-                className="absolute right-1 top-1 z-10 flex h-8 w-8 items-center justify-center text-sm text-muted touch-manipulation"
-              >
-                ?
               </button>
             </div>
             <div className="space-y-2 p-2">
@@ -343,7 +359,7 @@ function ExerciseGrid({
                   onClick={() => onAdd(ex)}
                   className="flex h-9 w-full items-center justify-center border border-hairline text-xs touch-manipulation"
                 >
-                  + Aggiungi
+                  {replaceMode ? "Sostituisci" : "+ Aggiungi"}
                 </button>
               )}
             </div>
@@ -358,6 +374,7 @@ function PreviewSheet({
   indexEntry,
   full,
   selected,
+  replaceMode = false,
   onClose,
   onAdd,
   onRemove,
@@ -365,6 +382,7 @@ function PreviewSheet({
   indexEntry: ExerciseIndexEntry;
   full: Exercise | null;
   selected: boolean;
+  replaceMode?: boolean;
   onClose: () => void;
   onAdd: () => void;
   onRemove: () => void;
@@ -394,6 +412,7 @@ function PreviewSheet({
           </Button>
         </div>
         <ExerciseThumb
+          link={false}
           eager
           size="lg"
           exerciseId={indexEntry.id}
@@ -421,7 +440,11 @@ function PreviewSheet({
           </ol>
         ) : null}
         <div className="mt-6">
-          {selected ? (
+          {replaceMode ? (
+            <Button type="button" variant="accent" className="w-full" onClick={onAdd}>
+              Usa questo esercizio
+            </Button>
+          ) : selected ? (
             <Button type="button" variant="danger" className="w-full" onClick={onRemove}>
               Rimuovi
             </Button>

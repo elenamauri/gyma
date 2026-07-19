@@ -68,6 +68,7 @@ export default function ExerciseDetailPage() {
       />
 
       <ExerciseThumb
+        link={false}
         eager
         size="lg"
         exerciseId={exercise.id}

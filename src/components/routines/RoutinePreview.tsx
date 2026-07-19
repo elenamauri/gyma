@@ -1,6 +1,12 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import {
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import {
   DndContext,
   closestCenter,
@@ -79,10 +85,6 @@ function formatDurationMin(min: number) {
   return `~${Math.floor(min / 60)}h ${min % 60}m`;
 }
 
-/**
- * Accordion header + optional summary (sets / duration / muscle map).
- * Closed by default — matches Hevy-style routine preview.
- */
 export function RoutineAccordion({
   name,
   subtitle,
@@ -165,6 +167,7 @@ export function RoutineExerciseList({
   onChangeReps,
   onChangeTimed,
   onRemove,
+  onReplace,
   onReorder,
   weightUnit = "kg",
 }: {
@@ -176,12 +179,13 @@ export function RoutineExerciseList({
   onChangeReps?: (id: string, patch: Partial<RoutineExerciseReps>) => void;
   onChangeTimed?: (id: string, patch: Partial<RoutineExerciseTimed>) => void;
   onRemove?: (id: string) => void;
-  /** When set, rows become drag-sortable (handle on the left). */
+  onReplace?: (id: string) => void;
   onReorder?: (activeId: string, overId: string) => void;
   weightUnit?: "kg" | "lb";
 }) {
   const ids = exercises.map((e) => e.id);
   const sortable = !!onReorder;
+  const [menuId, setMenuId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -207,9 +211,14 @@ export function RoutineExerciseList({
               ex={ex}
               cat={catalog.find((c) => c.id === ex.exerciseId)}
               open={editingId === ex.id}
+              menuOpen={menuId === ex.id}
+              onToggleMenu={() =>
+                setMenuId((id) => (id === ex.id ? null : ex.id))
+              }
               onSelect={onSelect}
               onChangeReps={onChangeReps}
               onRemove={onRemove}
+              onReplace={onReplace}
               weightUnit={weightUnit}
               dragHandle={dragHandle}
             />
@@ -219,7 +228,7 @@ export function RoutineExerciseList({
               {body}
             </SortableRow>
           ) : (
-            <li key={ex.id} className="py-3">
+            <li key={ex.id} className="overflow-hidden py-0">
               {body(null)}
             </li>
           );
@@ -230,9 +239,14 @@ export function RoutineExerciseList({
               ex={ex}
               cat={catalog.find((c) => c.id === ex.exerciseId)}
               open={editingId === ex.id}
+              menuOpen={menuId === ex.id}
+              onToggleMenu={() =>
+                setMenuId((id) => (id === ex.id ? null : ex.id))
+              }
               onSelect={onSelect}
               onChangeTimed={onChangeTimed}
               onRemove={onRemove}
+              onReplace={onReplace}
               dragHandle={dragHandle}
             />
           );
@@ -241,7 +255,7 @@ export function RoutineExerciseList({
               {body}
             </SortableRow>
           ) : (
-            <li key={ex.id} className="py-3">
+            <li key={ex.id} className="overflow-hidden py-0">
               {body(null)}
             </li>
           );
@@ -264,7 +278,6 @@ export function RoutineExerciseList({
   );
 }
 
-/** Reorder helper for draft/routine arrays. */
 export function reorderByIds<T extends { id: string }>(
   list: T[],
   activeId: string,
@@ -316,7 +329,7 @@ function SortableRow({
     <li
       ref={setNodeRef}
       style={style}
-      className={`py-3 ${isDragging ? "shadow-sm" : ""}`}
+      className={`overflow-hidden ${isDragging ? "shadow-sm" : ""}`}
     >
       {children(dragHandle)}
     </li>
@@ -342,73 +355,198 @@ function DragHandleIcon() {
   );
 }
 
+/** Horizontal swipe reveals delete. */
+function SwipeDelete({
+  enabled,
+  onDelete,
+  children,
+}: {
+  enabled: boolean;
+  onDelete?: () => void;
+  children: ReactNode;
+}) {
+  const [offset, setOffset] = useState(0);
+  const startX = useRef(0);
+  const startY = useRef(0);
+  const axis = useRef<"h" | "v" | null>(null);
+  const dragging = useRef(false);
+
+  if (!enabled || !onDelete) {
+    return <div className="py-3">{children}</div>;
+  }
+
+  function onPointerDown(e: ReactPointerEvent) {
+    if ((e.target as HTMLElement).closest("a,button,input,select,textarea")) {
+      return;
+    }
+    startX.current = e.clientX;
+    startY.current = e.clientY;
+    axis.current = null;
+    dragging.current = true;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  function onPointerMove(e: ReactPointerEvent) {
+    if (!dragging.current) return;
+    const dx = e.clientX - startX.current;
+    const dy = e.clientY - startY.current;
+    if (!axis.current) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      axis.current = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
+    }
+    if (axis.current !== "h") return;
+    e.preventDefault();
+    setOffset(Math.min(0, Math.max(-96, dx)));
+  }
+
+  function onPointerUp() {
+    if (!dragging.current) return;
+    dragging.current = false;
+    if (offset < -72) {
+      onDelete?.();
+      setOffset(0);
+    } else if (offset < -40) {
+      setOffset(-80);
+    } else {
+      setOffset(0);
+    }
+    axis.current = null;
+  }
+
+  return (
+    <div className="relative overflow-hidden">
+      <div className="absolute inset-y-0 right-0 flex w-20 items-stretch">
+        <button
+          type="button"
+          className="flex w-full items-center justify-center bg-accent text-sm font-medium text-chalk touch-manipulation"
+          onClick={() => {
+            setOffset(0);
+            onDelete?.();
+          }}
+        >
+          Elimina
+        </button>
+      </div>
+      <div
+        className="relative bg-chalk py-3 transition-transform duration-150"
+        style={{ transform: `translateX(${offset}px)` }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={() => {
+          dragging.current = false;
+          setOffset(0);
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function RowMenu({
+  open,
+  onToggle,
+  onReplace,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  onReplace?: () => void;
+}) {
+  if (!onReplace) return null;
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        className="flex h-9 w-9 items-center justify-center text-muted touch-manipulation"
+        aria-label="Opzioni esercizio"
+        aria-expanded={open}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+      >
+        ⋯
+      </button>
+      {open && (
+        <div className="absolute right-0 top-10 z-20 min-w-[10rem] border border-hairline bg-chalk py-1 shadow-md">
+          <button
+            type="button"
+            className="flex min-h-11 w-full items-center px-3 text-left text-sm touch-manipulation hover:bg-ink/[0.03]"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle();
+              onReplace();
+            }}
+          >
+            Sostituisci
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RepsRow({
   ex,
   cat,
   open,
+  menuOpen,
+  onToggleMenu,
   onSelect,
   onChangeReps,
   onRemove,
+  onReplace,
   weightUnit,
   dragHandle,
 }: {
   ex: RoutineExerciseReps;
   cat?: ExerciseIndexEntry;
   open: boolean;
+  menuOpen: boolean;
+  onToggleMenu: () => void;
   onSelect?: (id: string) => void;
   onChangeReps?: (id: string, patch: Partial<RoutineExerciseReps>) => void;
   onRemove?: (id: string) => void;
+  onReplace?: (id: string) => void;
   weightUnit: "kg" | "lb";
   dragHandle: ReactNode | null;
 }) {
   return (
-    <>
+    <SwipeDelete enabled={!!onRemove} onDelete={() => onRemove?.(ex.id)}>
       <div className="flex w-full items-center gap-1">
         {dragHandle}
+        <ExerciseThumb
+          size="sm"
+          exerciseId={ex.exerciseId}
+          exerciseName={ex.exerciseName}
+          imagePath={cat?.images[0]}
+          primaryMuscles={cat?.primaryMuscles ?? []}
+          secondaryMuscles={cat?.secondaryMuscles ?? []}
+        />
         <button
           type="button"
-          className="flex min-w-0 flex-1 items-center gap-3 text-left touch-manipulation"
+          className="min-w-0 flex-1 text-left touch-manipulation"
           onClick={() => onSelect?.(ex.id)}
           disabled={!onSelect}
         >
-          <ExerciseThumb
-            size="sm"
-            exerciseId={ex.exerciseId}
-            exerciseName={ex.exerciseName}
-            imagePath={cat?.images[0]}
-            primaryMuscles={cat?.primaryMuscles ?? []}
-            secondaryMuscles={cat?.secondaryMuscles ?? []}
-          />
-          <div className="min-w-0 flex-1">
-            <div className="truncate font-medium">{ex.exerciseName}</div>
-            {!open && (
-              <div className="text-sm text-muted">
-                {ex.sets} set · {ex.reps} rip.
-                {ex.targetWeight !== undefined ? ` · ${ex.targetWeight}` : ""}
-              </div>
-            )}
-          </div>
-          {onSelect ? (
-            <span
-              className={`text-lg text-muted transition-transform ${
-                open ? "rotate-0" : "-rotate-90"
-              }`}
-              aria-hidden
-            >
-              ⌄
-            </span>
-          ) : null}
+          <div className="truncate font-medium">{ex.exerciseName}</div>
+          {!open && (
+            <div className="text-sm text-muted">
+              {ex.sets} set · {ex.reps} rip.
+              {ex.targetWeight !== undefined ? ` · ${ex.targetWeight}` : ""}
+            </div>
+          )}
         </button>
+        <RowMenu
+          open={menuOpen}
+          onToggle={onToggleMenu}
+          onReplace={onReplace ? () => onReplace(ex.id) : undefined}
+        />
       </div>
 
       {open && onChangeReps && (
-        <div
-          className={`mt-3 space-y-3 ${
-            dragHandle
-              ? "pl-[calc(2rem+3.5rem+0.75rem)]"
-              : "pl-[calc(3.5rem+0.75rem)]"
-          }`}
-        >
+        <div className="mt-3 space-y-3 pl-[calc(3.5rem+0.75rem)]">
           <input
             className="w-full border-0 border-b border-hairline bg-transparent py-1.5 text-sm outline-none placeholder:text-muted focus:border-accent"
             placeholder="Note…"
@@ -445,18 +583,9 @@ function RepsRow({
               className="border-l border-hairline"
             />
           </div>
-          {onRemove ? (
-            <button
-              type="button"
-              className="text-sm text-accent touch-manipulation"
-              onClick={() => onRemove(ex.id)}
-            >
-              Rimuovi
-            </button>
-          ) : null}
         </div>
       )}
-    </>
+    </SwipeDelete>
   );
 }
 
@@ -464,66 +593,59 @@ function TimedRow({
   ex,
   cat,
   open,
+  menuOpen,
+  onToggleMenu,
   onSelect,
   onChangeTimed,
   onRemove,
+  onReplace,
   dragHandle,
 }: {
   ex: RoutineExerciseTimed;
   cat?: ExerciseIndexEntry;
   open: boolean;
+  menuOpen: boolean;
+  onToggleMenu: () => void;
   onSelect?: (id: string) => void;
   onChangeTimed?: (id: string, patch: Partial<RoutineExerciseTimed>) => void;
   onRemove?: (id: string) => void;
+  onReplace?: (id: string) => void;
   dragHandle: ReactNode | null;
 }) {
   return (
-    <>
+    <SwipeDelete enabled={!!onRemove} onDelete={() => onRemove?.(ex.id)}>
       <div className="flex w-full items-center gap-1">
         {dragHandle}
+        <ExerciseThumb
+          size="sm"
+          exerciseId={ex.exerciseId}
+          exerciseName={ex.exerciseName}
+          imagePath={cat?.images[0]}
+          primaryMuscles={cat?.primaryMuscles ?? []}
+          secondaryMuscles={cat?.secondaryMuscles ?? []}
+        />
         <button
           type="button"
-          className="flex min-w-0 flex-1 items-center gap-3 text-left touch-manipulation"
+          className="min-w-0 flex-1 text-left touch-manipulation"
           onClick={() => onSelect?.(ex.id)}
           disabled={!onSelect}
         >
-          <ExerciseThumb
-            size="sm"
-            exerciseId={ex.exerciseId}
-            exerciseName={ex.exerciseName}
-            imagePath={cat?.images[0]}
-            primaryMuscles={cat?.primaryMuscles ?? []}
-            secondaryMuscles={cat?.secondaryMuscles ?? []}
-          />
-          <div className="min-w-0 flex-1">
-            <div className="truncate font-medium">{ex.exerciseName}</div>
-            {!open && (
-              <div className="text-sm text-muted">
-                {ex.durationSeconds}s · recupero {ex.restSeconds}s
-              </div>
-            )}
-          </div>
-          {onSelect ? (
-            <span
-              className={`text-lg text-muted transition-transform ${
-                open ? "rotate-0" : "-rotate-90"
-              }`}
-              aria-hidden
-            >
-              ⌄
-            </span>
-          ) : null}
+          <div className="truncate font-medium">{ex.exerciseName}</div>
+          {!open && (
+            <div className="text-sm text-muted">
+              {ex.durationSeconds}s · recupero {ex.restSeconds}s
+            </div>
+          )}
         </button>
+        <RowMenu
+          open={menuOpen}
+          onToggle={onToggleMenu}
+          onReplace={onReplace ? () => onReplace(ex.id) : undefined}
+        />
       </div>
 
       {open && onChangeTimed && (
-        <div
-          className={`mt-3 space-y-3 ${
-            dragHandle
-              ? "pl-[calc(2rem+3.5rem+0.75rem)]"
-              : "pl-[calc(3.5rem+0.75rem)]"
-          }`}
-        >
+        <div className="mt-3 space-y-3 pl-[calc(3.5rem+0.75rem)]">
           <div className="grid grid-cols-2 items-center gap-0 border border-hairline">
             <CompactField
               label="Durata"
@@ -539,18 +661,9 @@ function TimedRow({
               className="border-l border-hairline"
             />
           </div>
-          {onRemove ? (
-            <button
-              type="button"
-              className="text-sm text-accent touch-manipulation"
-              onClick={() => onRemove(ex.id)}
-            >
-              Rimuovi
-            </button>
-          ) : null}
         </div>
       )}
-    </>
+    </SwipeDelete>
   );
 }
 

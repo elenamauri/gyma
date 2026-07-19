@@ -247,6 +247,12 @@ export function RoutineForm({
                 : draft.timedExercises.findIndex((e) => e.id === id);
             if (idx >= 0) removeAt(idx);
           }}
+          onReplace={(id) => {
+            saveDraft({ ...draft, wizardStep: 2 });
+            router.push(
+              `/routines/pick?return=${encodeURIComponent(returnPath)}&replace=${encodeURIComponent(id)}`,
+            );
+          }}
           onReorder={(activeId, overId) => {
             if (draft.type === "reps") {
               update({

@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { exerciseGifUrl, exerciseImageUrl } from "@/lib/exercises";
 import { MuscleMap } from "@/components/exercises/MuscleMap";
 
@@ -29,6 +30,7 @@ function useOnceInView<T extends HTMLElement>() {
 
 /**
  * Prefer animated ExerciseDB GIF → static photo → muscle map.
+ * Tap opens catalog exercise page when `link` is true (default if id present).
  */
 export const ExerciseThumb = memo(function ExerciseThumb({
   exerciseId,
@@ -39,6 +41,7 @@ export const ExerciseThumb = memo(function ExerciseThumb({
   size = "md",
   className = "",
   eager = false,
+  link,
 }: {
   exerciseId?: string;
   exerciseName?: string;
@@ -48,11 +51,14 @@ export const ExerciseThumb = memo(function ExerciseThumb({
   size?: "sm" | "md" | "lg";
   className?: string;
   eager?: boolean;
+  /** Open /catalog/[id] on tap. Defaults to true when exerciseId is set. */
+  link?: boolean;
 }) {
   const { ref, visible } = useOnceInView<HTMLDivElement>();
   const show = eager || visible;
   const [gif, setGif] = useState<string | null>(null);
   const [gifFailed, setGifFailed] = useState(false);
+  const asLink = link ?? Boolean(exerciseId);
 
   useEffect(() => {
     if (!show) return;
@@ -75,11 +81,8 @@ export const ExerciseThumb = memo(function ExerciseThumb({
 
   const photo = exerciseImageUrl(imagePath);
 
-  return (
-    <div
-      ref={ref}
-      className={`relative flex items-center justify-center overflow-hidden border border-hairline bg-ink/[0.03] ${box} ${className}`}
-    >
+  const inner = (
+    <>
       {!show ? (
         <span className="h-6 w-6 rounded-full bg-ink/10" aria-hidden />
       ) : gif && !gifFailed ? (
@@ -109,6 +112,24 @@ export const ExerciseThumb = memo(function ExerciseThumb({
       ) : (
         <span className="text-xs text-muted">—</span>
       )}
+    </>
+  );
+
+  const sharedClass = `relative flex items-center justify-center overflow-hidden border border-hairline bg-ink/[0.03] ${box} ${className}`;
+
+  return (
+    <div ref={ref} className={sharedClass}>
+      {asLink && exerciseId ? (
+        <Link
+          href={`/catalog/${exerciseId}`}
+          className="absolute inset-0 z-10 touch-manipulation"
+          aria-label={
+            exerciseName ? `Info ${exerciseName}` : "Info esercizio"
+          }
+          onClick={(e) => e.stopPropagation()}
+        />
+      ) : null}
+      {inner}
     </div>
   );
 });

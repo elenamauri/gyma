@@ -217,6 +217,7 @@ function QuickSection({
               className="flex items-center gap-3 py-2 hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               <ExerciseThumb
+                link={false}
                 size="sm"
                 exerciseId={ex.id}
                 exerciseName={ex.name}

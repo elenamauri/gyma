@@ -71,7 +71,7 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
   const router = useRouter();
   const params = useSearchParams();
   const justFinished = params.get("done") === "1";
-  const { sessions, upsertSession, settings } = useAppStore();
+  const { sessions, upsertSession, deleteSession, settings } = useAppStore();
   const { exercises: catalog } = useExerciseCatalog();
   const session = sessions.find((s) => s.id === sessionId);
 
@@ -183,6 +183,19 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
     };
     upsertSession(copy);
     router.push(`/session/live?id=${copy.id}`);
+  }
+
+  function remove() {
+    const label = session!.routineName ?? "questa sessione";
+    if (
+      !confirm(
+        `Eliminare “${label}”? I dati di volume e PR di questa sessione spariranno dallo storico.`,
+      )
+    ) {
+      return;
+    }
+    deleteSession(session!.id);
+    router.replace("/history");
   }
 
   const unit = settings.unit;
@@ -381,6 +394,10 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
           </Button>
         </Link>
       </div>
+
+      <Button type="button" variant="danger" className="w-full" onClick={remove}>
+        Elimina sessione
+      </Button>
     </div>
   );
 }

@@ -12,7 +12,7 @@ import Link from "next/link";
 
 export function HistoryPage() {
   const router = useRouter();
-  const { sessions, upsertSession } = useAppStore();
+  const { sessions, upsertSession, deleteSession } = useAppStore();
   const completed = useMemo(
     () =>
       sessions
@@ -54,6 +54,18 @@ export function HistoryPage() {
     };
     upsertSession(copy);
     router.push(`/session/live?id=${copy.id}`);
+  }
+
+  function removeSession(session: Session) {
+    const label = session.routineName ?? "questa sessione";
+    if (
+      !confirm(
+        `Eliminare “${label}”? I dati di volume e PR di questa sessione spariranno dallo storico.`,
+      )
+    ) {
+      return;
+    }
+    deleteSession(session.id);
   }
 
   return (
@@ -102,14 +114,24 @@ export function HistoryPage() {
                   {s.exercises.length} esercizi · {s.type}
                 </div>
               </Link>
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full"
-                onClick={() => repeatSession(s)}
-              >
-                Ripeti
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="flex-1"
+                  onClick={() => repeatSession(s)}
+                >
+                  Ripeti
+                </Button>
+                <Button
+                  type="button"
+                  variant="danger"
+                  className="flex-1"
+                  onClick={() => removeSession(s)}
+                >
+                  Elimina
+                </Button>
+              </div>
             </li>
           ))}
         </ul>

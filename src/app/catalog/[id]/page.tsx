@@ -55,8 +55,6 @@ export default function ExerciseDetailPage() {
         description={`${exercise.level} · ${exercise.category}${
           exercise.equipment ? ` · ${exercise.equipment}` : ""
         }`}
-        backHref="/catalog"
-        backLabel="Catalogo"
         action={
           <Button
             type="button"

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Suspense, type ReactNode } from "react";
 
 const TABS = [
   {
@@ -30,6 +30,44 @@ const TABS = [
   },
 ] as const;
 
+function resolveChrome(
+  pathname: string,
+  returnTo: string | null,
+): { title: string; backHref?: string } {
+  if (pathname === "/") return { title: "Home" };
+  if (pathname === "/routines") return { title: "Routine" };
+  if (pathname === "/routines/new") {
+    return { title: "Nuova routine", backHref: "/routines" };
+  }
+  if (pathname === "/routines/pick") {
+    return {
+      title: "Aggiungi esercizi",
+      backHref: returnTo || "/routines/new",
+    };
+  }
+  if (/^\/routines\/[^/]+\/edit$/.test(pathname)) {
+    const id = pathname.split("/")[2];
+    return { title: "Modifica", backHref: `/routines/${id}` };
+  }
+  if (/^\/routines\/[^/]+$/.test(pathname)) {
+    return { title: "Routine", backHref: "/routines" };
+  }
+  if (pathname === "/catalog") return { title: "Catalogo", backHref: "/" };
+  if (/^\/catalog\//.test(pathname)) {
+    return { title: "Esercizio", backHref: "/catalog" };
+  }
+  if (pathname === "/history") return { title: "Storico", backHref: "/" };
+  if (/^\/history\//.test(pathname)) {
+    return { title: "Sessione", backHref: "/history" };
+  }
+  if (pathname === "/progress") return { title: "Progressi", backHref: "/" };
+  if (pathname === "/settings") return { title: "Utente" };
+  if (pathname.startsWith("/auth")) {
+    return { title: "Accesso", backHref: "/settings" };
+  }
+  return { title: "GYMA" };
+}
+
 export function AppShell({
   children,
   hideNav = false,
@@ -44,16 +82,9 @@ export function AppShell({
   return (
     <div className="min-h-dvh bg-chalk text-ink">
       {showNav && (
-        <header className="sticky top-0 z-40 border-b border-hairline bg-chalk/95 pt-[env(safe-area-inset-top)] backdrop-blur-sm">
-          <div className="mx-auto flex h-12 max-w-lg items-center px-4">
-            <Link
-              href="/"
-              className="font-display text-lg font-bold tracking-tight focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-            >
-              GYMA
-            </Link>
-          </div>
-        </header>
+        <Suspense fallback={<TopBarFallback />}>
+          <AppTopBar />
+        </Suspense>
       )}
 
       <main
@@ -97,6 +128,42 @@ export function AppShell({
         </nav>
       )}
     </div>
+  );
+}
+
+function TopBarFallback() {
+  return (
+    <header className="sticky top-0 z-40 border-b border-hairline bg-chalk/95 pt-[env(safe-area-inset-top)] backdrop-blur-sm">
+      <div className="mx-auto flex h-12 max-w-lg items-center px-2" />
+    </header>
+  );
+}
+
+function AppTopBar() {
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const { title, backHref } = resolveChrome(pathname, params.get("return"));
+
+  return (
+    <header className="sticky top-0 z-40 border-b border-hairline bg-chalk/95 pt-[env(safe-area-inset-top)] backdrop-blur-sm">
+      <div className="mx-auto grid h-12 max-w-lg grid-cols-[2.75rem_1fr_2.75rem] items-center px-2">
+        {backHref ? (
+          <Link
+            href={backHref}
+            className="flex h-11 w-11 items-center justify-center text-lg touch-manipulation focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            aria-label="Indietro"
+          >
+            ←
+          </Link>
+        ) : (
+          <span aria-hidden />
+        )}
+        <h1 className="truncate text-center font-display text-base font-bold tracking-tight">
+          {title}
+        </h1>
+        <span aria-hidden />
+      </div>
+    </header>
   );
 }
 

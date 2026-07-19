@@ -19,6 +19,8 @@ export interface RoutineDraft {
   timedExercises: RoutineExerciseTimed[];
   createdAt?: string;
   returnPath: string;
+  /** 1 = nome, 2 = esercizi / anteprima */
+  wizardStep?: 1 | 2;
 }
 
 export function emptyDraft(returnPath: string, initial?: Routine): RoutineDraft {
@@ -37,6 +39,7 @@ export function emptyDraft(returnPath: string, initial?: Routine): RoutineDraft 
           : [],
       createdAt: initial.createdAt,
       returnPath,
+      wizardStep: 2,
     };
   }
   return {
@@ -45,6 +48,7 @@ export function emptyDraft(returnPath: string, initial?: Routine): RoutineDraft 
     repsExercises: [],
     timedExercises: [],
     returnPath,
+    wizardStep: 1,
   };
 }
 

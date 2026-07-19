@@ -39,7 +39,6 @@ export default function RoutinesPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Routine"
         description="Serie/reps oppure circuiti a tempo."
         action={
           <Link href="/routines/new">

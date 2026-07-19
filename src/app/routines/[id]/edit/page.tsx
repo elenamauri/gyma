@@ -5,7 +5,6 @@ import { useParams } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { RoutineForm } from "@/components/routines/RoutineForm";
 import { Button, EmptyState } from "@/components/ui/primitives";
-import { PageHeader } from "@/components/ui/PageHeader";
 
 export default function EditRoutinePage() {
   const params = useParams();
@@ -32,15 +31,5 @@ export default function EditRoutinePage() {
     );
   }
 
-  return (
-    <div className="space-y-5">
-      <PageHeader
-        title="Modifica routine"
-        description={routine.name}
-        backHref={`/routines/${routine.id}`}
-        backLabel="Dettaglio"
-      />
-      <RoutineForm initial={routine} returnPath={returnPath} />
-    </div>
-  );
+  return <RoutineForm initial={routine} returnPath={returnPath} />;
 }

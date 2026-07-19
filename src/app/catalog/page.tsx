@@ -11,12 +11,7 @@ export default function CatalogPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        title="Catalogo"
-        description="Cerca e filtra gli esercizi."
-        backHref="/"
-        backLabel="Home"
-      />
+      <PageHeader description="Cerca e filtra gli esercizi." />
       {loading ? (
         <p className="text-sm text-muted">Caricamento esercizi…</p>
       ) : (

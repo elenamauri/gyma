@@ -1,39 +1,36 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+/** In-page header under the app top bar (title lives in AppShell). */
 export function PageHeader({
   title,
   description,
-  backHref,
-  backLabel = "Indietro",
   action,
 }: {
-  title: string;
+  title?: string;
   description?: string;
+  /** @deprecated back is handled by AppShell */
   backHref?: string;
   backLabel?: string;
   action?: ReactNode;
 }) {
+  if (!title && !description && !action) return null;
+
   return (
-    <header className="space-y-3">
-      {backHref && (
-        <Link
-          href={backHref}
-          className="inline-flex min-h-11 items-center gap-1 text-sm text-muted hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          <span aria-hidden>←</span>
-          {backLabel}
-        </Link>
-      )}
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="font-display text-3xl font-bold tracking-tight">{title}</h1>
-          {description && (
-            <p className="mt-1 text-sm text-muted">{description}</p>
-          )}
-        </div>
-        {action && <div className="shrink-0">{action}</div>}
+    <header className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        {title ? (
+          <h2 className="font-display text-2xl font-bold tracking-tight">
+            {title}
+          </h2>
+        ) : null}
+        {description ? (
+          <p className={`text-sm text-muted ${title ? "mt-1" : ""}`}>
+            {description}
+          </p>
+        ) : null}
       </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
     </header>
   );
 }

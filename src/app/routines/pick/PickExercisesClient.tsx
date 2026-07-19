@@ -156,28 +156,17 @@ export default function PickExercisesClient() {
 
   return (
     <div className="space-y-4 pb-28">
-      <header className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-end gap-1">
         <button
           type="button"
-          aria-label="Chiudi"
-          onClick={() => router.push(returnTo)}
-          className="flex h-11 w-11 items-center justify-center text-xl touch-manipulation"
+          aria-label="Cerca"
+          onClick={() => setShowSearch((v) => !v)}
+          className="flex h-11 w-11 items-center justify-center text-muted touch-manipulation"
         >
-          ×
+          ⌕
         </button>
-        <h1 className="font-display text-lg font-bold">Aggiungi esercizi</h1>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            aria-label="Cerca"
-            onClick={() => setShowSearch((v) => !v)}
-            className="flex h-11 w-11 items-center justify-center text-muted touch-manipulation"
-          >
-            ⌕
-          </button>
-          <Mono className="min-w-[2ch] text-sm text-accent">{count}</Mono>
-        </div>
-      </header>
+        <Mono className="min-w-[2ch] text-sm text-accent">{count}</Mono>
+      </div>
 
       {showSearch && (
         <Input
@@ -262,7 +251,7 @@ export default function PickExercisesClient() {
             className="w-full"
             onClick={() => router.push(returnTo)}
           >
-            Fatto · {count} esercizi
+            Fatto · {count} selezionati
           </Button>
         </div>
       </div>

@@ -22,7 +22,7 @@ npm run dev
 
 Apri [http://localhost:3000](http://localhost:3000).
 
-> **GIF ExerciseDB:** circa 70%+ degli esercizi hanno una demo animata via CDN. Uso personale/non commerciale; crediti AscendAPI. Per uso commerciale serve un piano [RapidAPI](https://github.com/ExerciseDB/exercisedb-api).
+> **GIF ExerciseDB:** matching **strict** (nome esatto / stessi token, niente fuzzy) — circa 30% degli esercizi ha una demo animata via CDN; gli altri usano foto free-exercise-db o muscle map. Meglio nessuna GIF che una sbagliata. Uso personale/non commerciale; crediti AscendAPI. Per uso commerciale serve un piano [RapidAPI](https://github.com/ExerciseDB/exercisedb-api).
 
 ## Account cloud gratis (Supabase)
 

@@ -21,13 +21,32 @@ type GifMap = {
 let gifMapCache: GifMap | null = null;
 let gifMapPromise: Promise<GifMap> | null = null;
 
+/** Must stay aligned with scripts/index-gifs.mjs `norm()` for name fallback. */
 function normalizeExerciseName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/\([^)]*\)/g, " ")
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  let t = name.toLowerCase().trim();
+  t = t.replace(/[()]/g, " ");
+  t = t.replace(/flyes?\b/g, "fly");
+  t = t.replace(/dumbell/g, "dumbbell");
+  const pairs: [string, string][] = [
+    ["pushups", "push up"],
+    ["push-ups", "push up"],
+    ["pushup", "push up"],
+    ["pullups", "pull up"],
+    ["pull-ups", "pull up"],
+    ["pullup", "pull up"],
+    ["chinups", "chin up"],
+    ["chin-ups", "chin up"],
+    ["chinup", "chin up"],
+    ["situps", "sit up"],
+    ["sit-ups", "sit up"],
+    ["situp", "sit up"],
+    ["pulldowns", "pull down"],
+    ["pulldown", "pull down"],
+    ["pushdowns", "push down"],
+    ["pushdown", "push down"],
+  ];
+  for (const [a, b] of pairs) t = t.split(a).join(b);
+  return t.replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
 export async function loadGifMap(): Promise<GifMap> {
@@ -48,7 +67,7 @@ export async function loadGifMap(): Promise<GifMap> {
   return gifMapPromise;
 }
 
-/** ExerciseDB animated demo GIF (CDN). Empty if no match. */
+/** ExerciseDB animated demo GIF (CDN). Empty if no strict match. */
 export async function exerciseGifUrl(
   exerciseId?: string,
   exerciseName?: string,
@@ -57,6 +76,7 @@ export async function exerciseGifUrl(
   if (exerciseId && map.byExerciseId[exerciseId]) {
     return map.byExerciseId[exerciseId];
   }
+  // Exact normalized name only — never fuzzy (wrong demos)
   if (exerciseName) {
     const key = normalizeExerciseName(exerciseName);
     if (map.byNormalizedName[key]) return map.byNormalizedName[key];

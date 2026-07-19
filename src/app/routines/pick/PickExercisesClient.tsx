@@ -71,7 +71,6 @@ export default function PickExercisesClient() {
   const [draft, setDraft] = useState<RoutineDraft | null>(null);
   const [query, setQuery] = useState("");
   const [muscleChip, setMuscleChip] = useState("all");
-  const [showSearch, setShowSearch] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [previewFull, setPreviewFull] = useState<Exercise | null>(null);
 
@@ -156,27 +155,16 @@ export default function PickExercisesClient() {
 
   return (
     <div className="space-y-4 pb-28">
-      <div className="flex items-center justify-end gap-1">
-        <button
-          type="button"
-          aria-label="Cerca"
-          onClick={() => setShowSearch((v) => !v)}
-          className="flex h-11 w-11 items-center justify-center text-muted touch-manipulation"
-        >
-          ⌕
-        </button>
-        <Mono className="min-w-[2ch] text-sm text-accent">{count}</Mono>
-      </div>
-
-      {showSearch && (
+      <div className="flex items-center gap-3">
         <Input
           placeholder="Cerca esercizio…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          autoFocus
           autoComplete="off"
+          className="min-w-0 flex-1"
         />
-      )}
+        <Mono className="min-w-[2ch] shrink-0 text-sm text-accent">{count}</Mono>
+      </div>
 
       {/* Muscle carousel */}
       <div className="-mx-4 overflow-x-auto px-4">

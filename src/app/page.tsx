@@ -25,6 +25,8 @@ export default function HomePage() {
   const streak = computeStreak(
     completed.map((s) => toDateKey(s.completedAt ?? s.startedAt)),
   );
+  const hasActive =
+    !!activeId && sessions.some((s) => s.id === activeId && s.status === "active");
 
   function startRoutine(routineId: string) {
     const routine = routines.find((r) => r.id === routineId);
@@ -45,59 +47,61 @@ export default function HomePage() {
   }
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       <section className="space-y-3">
-        <p className="text-xs uppercase tracking-[0.2em] text-muted">Workout tracker</p>
-        <h1 className="font-display text-5xl font-bold tracking-tight sm:text-6xl">
-          GYMA
-        </h1>
-        <p className="max-w-md text-sm text-muted">
-          Catalogo, routine e sessioni live. Tutto sul dispositivo, senza account.
-        </p>
-        <div className="flex flex-wrap gap-2 pt-2">
-          {activeId && sessions.some((s) => s.id === activeId && s.status === "active") ? (
+        <h1 className="font-display text-4xl font-bold tracking-tight">Dashboard</h1>
+        <p className="text-sm text-muted">Allenati, tieni traccia, ripeti.</p>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {hasActive ? (
             <Button
               type="button"
               variant="accent"
+              className="w-full sm:w-auto"
               onClick={() => router.push(`/session/live?id=${activeId}`)}
             >
               Riprendi sessione
             </Button>
           ) : (
-            <Button type="button" variant="accent" onClick={startEmpty}>
+            <Button
+              type="button"
+              variant="accent"
+              className="w-full sm:w-auto"
+              onClick={startEmpty}
+            >
               Sessione libera
             </Button>
           )}
-          <Link href="/routines">
-            <Button type="button" variant="ghost">
-              Routine
-            </Button>
-          </Link>
-          <Link href="/catalog">
-            <Button type="button" variant="ghost">
-              Catalogo
-            </Button>
-          </Link>
         </div>
       </section>
 
-      <section className="grid grid-cols-3 gap-4 border-y border-hairline py-5">
+      <section className="grid grid-cols-3 gap-3 border-y border-hairline py-4">
         <Stat label="Streak" value={String(streak)} />
         <Stat label="Sessioni" value={String(completed.length)} />
         <Stat label="Routine" value={String(routines.length)} />
       </section>
 
       <section>
+        <h2 className="mb-2 font-display text-lg font-bold border-b border-hairline pb-2">
+          Vai a
+        </h2>
+        <ul className="divide-y divide-hairline">
+          <DashLink href="/catalog" title="Catalogo" subtitle="873 esercizi, filtri, preferiti" />
+          <DashLink href="/history" title="Storico" subtitle="Sessioni, streak, ripeti" />
+          <DashLink href="/progress" title="Progressi" subtitle="Carichi e peso corporeo" />
+        </ul>
+      </section>
+
+      <section>
         <div className="mb-3 flex items-end justify-between border-b border-hairline pb-2">
           <h2 className="font-display text-lg font-bold">Avvia routine</h2>
-          <Link href="/routines/new" className="text-sm text-muted hover:text-ink">
-            + Nuova
+          <Link href="/routines" className="text-sm text-muted hover:text-ink">
+            Tutte
           </Link>
         </div>
         {routines.length === 0 ? (
           <EmptyState
             title="Nessuna routine"
-            description="Crea la tua prima routine oppure importane una da Claude."
+            description="Crea la tua prima routine dalla tab Routine."
             action={
               <Link href="/routines/new">
                 <Button type="button">Crea routine</Button>
@@ -106,7 +110,7 @@ export default function HomePage() {
           />
         ) : (
           <ul className="divide-y divide-hairline">
-            {routines.slice(0, 6).map((r) => (
+            {routines.slice(0, 5).map((r) => (
               <li
                 key={r.id}
                 className="flex items-center justify-between gap-3 py-3"
@@ -114,7 +118,8 @@ export default function HomePage() {
                 <div className="min-w-0">
                   <div className="truncate font-medium">{r.name}</div>
                   <div className="text-xs text-muted">
-                    {r.type} · {r.exercises.length} esercizi
+                    {r.type === "reps" ? "Serie/reps" : "A tempo"} ·{" "}
+                    {r.exercises.length} esercizi
                   </div>
                 </div>
                 <Button type="button" onClick={() => startRoutine(r.id)}>
@@ -135,5 +140,32 @@ function Stat({ label, value }: { label: string; value: string }) {
       <div className="text-xs uppercase tracking-wide text-muted">{label}</div>
       <Mono className="text-2xl">{value}</Mono>
     </div>
+  );
+}
+
+function DashLink({
+  href,
+  title,
+  subtitle,
+}: {
+  href: string;
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <li>
+      <Link
+        href={href}
+        className="flex items-center justify-between gap-3 py-3 hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      >
+        <div className="min-w-0">
+          <div className="font-medium">{title}</div>
+          <div className="text-xs text-muted">{subtitle}</div>
+        </div>
+        <span className="text-muted" aria-hidden>
+          →
+        </span>
+      </Link>
+    </li>
   );
 }

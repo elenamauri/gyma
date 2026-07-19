@@ -16,12 +16,27 @@
 
 html {
   color-scheme: light;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
   color: var(--ink);
   background: var(--chalk);
   font-family: var(--font-body), system-ui, sans-serif;
+  min-height: 100dvh;
+}
+
+/* Installed PWA / standalone */
+@media (display-mode: standalone) {
+  body {
+    user-select: none;
+  }
+
+  input,
+  textarea,
+  select {
+    user-select: text;
+  }
 }
 
 .font-display {

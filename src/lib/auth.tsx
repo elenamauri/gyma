@@ -39,12 +39,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     let cancelled = false;
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (cancelled) return;
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
-      setReady(true);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (cancelled) return;
+        setSession(data.session);
+        setUser(data.session?.user ?? null);
+        setReady(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setReady(true);
+      });
 
     const {
       data: { subscription },

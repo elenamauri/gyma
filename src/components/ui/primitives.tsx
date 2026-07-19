@@ -1,4 +1,10 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import type {
+  ButtonHTMLAttributes,
+  InputHTMLAttributes,
+  ReactNode,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes,
+} from "react";
 
 export function Button({
   variant = "primary",
@@ -8,7 +14,7 @@ export function Button({
   variant?: "primary" | "ghost" | "danger" | "accent";
 }) {
   const base =
-    "inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40";
+    "inline-flex min-h-11 items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium transition active:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40 touch-manipulation";
   const variants = {
     primary: "bg-ink text-chalk hover:bg-ink/90",
     ghost: "bg-transparent text-ink border border-hairline hover:bg-ink/[0.03]",
@@ -26,7 +32,7 @@ export function Input({
 }: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
-      className={`w-full border border-hairline bg-transparent px-3 py-2 text-sm text-ink placeholder:text-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${className}`}
+      className={`min-h-11 w-full border border-hairline bg-transparent px-3 py-2.5 text-base text-ink placeholder:text-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent touch-manipulation sm:text-sm ${className}`}
       {...props}
     />
   );
@@ -38,7 +44,7 @@ export function Textarea({
 }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
-      className={`w-full border border-hairline bg-transparent px-3 py-2 text-sm text-ink placeholder:text-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${className}`}
+      className={`w-full border border-hairline bg-transparent px-3 py-2.5 text-base text-ink placeholder:text-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent touch-manipulation sm:text-sm ${className}`}
       {...props}
     />
   );
@@ -51,7 +57,7 @@ export function Select({
 }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
-      className={`w-full border border-hairline bg-transparent px-3 py-2 text-sm text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${className}`}
+      className={`min-h-11 w-full border border-hairline bg-transparent px-3 py-2.5 text-base text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent touch-manipulation sm:text-sm ${className}`}
       {...props}
     >
       {children}
@@ -67,7 +73,10 @@ export function Label({
   htmlFor?: string;
 }) {
   return (
-    <label htmlFor={htmlFor} className="mb-1 block text-xs uppercase tracking-wide text-muted">
+    <label
+      htmlFor={htmlFor}
+      className="mb-1.5 block text-xs uppercase tracking-wide text-muted"
+    >
       {children}
     </label>
   );
@@ -83,7 +92,7 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="border border-dashed border-hairline px-6 py-12 text-center">
+    <div className="border border-dashed border-hairline px-5 py-10 text-center">
       <h2 className="font-display text-xl font-bold">{title}</h2>
       <p className="mt-2 text-sm text-muted">{description}</p>
       {action && <div className="mt-6 flex justify-center">{action}</div>}

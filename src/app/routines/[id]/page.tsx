@@ -6,6 +6,7 @@ import { useAppStore } from "@/lib/store";
 import { createSessionFromRoutine } from "@/components/session/LiveSession";
 import type { RoutineExerciseReps, RoutineExerciseTimed } from "@/lib/types";
 import { Button, EmptyState, Mono } from "@/components/ui/primitives";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 export default function RoutineDetailPage() {
   const params = useParams();
@@ -35,25 +36,20 @@ export default function RoutineDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <Link href="/routines" className="text-sm text-muted hover:text-ink">
-        ← Routine
-      </Link>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">
-            {routine.name}
-          </h1>
-          <p className="text-sm text-muted">
-            {routine.type === "reps" ? "Serie/reps" : "A tempo"} ·{" "}
-            {routine.exercises.length} esercizi
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="accent" onClick={start}>
-            Avvia
-          </Button>
-          <Link href={`/routines/${routine.id}/edit`}>
+    <div className="space-y-5">
+      <PageHeader
+        title={routine.name}
+        description={`${routine.type === "reps" ? "Serie/reps" : "A tempo"} · ${routine.exercises.length} esercizi`}
+        backHref="/routines"
+        backLabel="Routine"
+      />
+
+      <div className="grid grid-cols-1 gap-2">
+        <Button type="button" variant="accent" className="w-full" onClick={start}>
+          Avvia
+        </Button>
+        <div className="grid grid-cols-2 gap-2">
+          <Link href={`/routines/${routine.id}/edit`} className="contents">
             <Button type="button" variant="ghost">
               Modifica
             </Button>
@@ -82,7 +78,7 @@ export default function RoutineDetailPage() {
                 </div>
                 <Mono className="text-sm text-muted">
                   {ex.sets} × {ex.reps}
-                  {ex.targetWeight !== undefined ? ` @ ${ex.targetWeight}` : ""} ·{" "}
+                  {ex.targetWeight !== undefined ? ` @ ${ex.targetWeight}` : ""} ·
                   recupero {ex.restSeconds}s
                 </Mono>
               </li>

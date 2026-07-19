@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { RoutineForm } from "@/components/routines/RoutineForm";
 import { Button, EmptyState } from "@/components/ui/primitives";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 export default function EditRoutinePage() {
   const params = useParams();
@@ -31,15 +32,13 @@ export default function EditRoutinePage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <Link href={`/routines/${routine.id}`} className="text-sm text-muted hover:text-ink">
-          ← {routine.name}
-        </Link>
-        <h1 className="mt-2 font-display text-3xl font-bold tracking-tight">
-          Modifica routine
-        </h1>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        title="Modifica routine"
+        description={routine.name}
+        backHref={`/routines/${routine.id}`}
+        backLabel="Dettaglio"
+      />
       <RoutineForm initial={routine} />
     </div>
   );

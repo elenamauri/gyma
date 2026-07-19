@@ -162,12 +162,12 @@ export function ExerciseCatalogList({
         ) : (
           <ul className="divide-y divide-hairline">
             {filtered.map((ex) => (
-              <li key={ex.id} className="flex items-center gap-3 py-2.5">
+              <li key={ex.id} className="flex min-h-14 items-center gap-2">
                 <Link
                   href={`/catalog/${ex.id}`}
-                  className="min-w-0 flex-1 hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  className="min-w-0 flex-1 py-3 hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 >
-                  <div className="truncate text-sm font-medium">{ex.name}</div>
+                  <div className="truncate text-[15px] font-medium">{ex.name}</div>
                   <div className="truncate text-xs text-muted">
                     {ex.primaryMuscles.join(", ")}
                     {ex.equipment ? ` · ${ex.equipment}` : ""}
@@ -182,7 +182,7 @@ export function ExerciseCatalogList({
                       : "Aggiungi ai preferiti"
                   }
                   onClick={() => onToggleFavorite(ex.id)}
-                  className={`shrink-0 px-2 py-1 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center text-lg touch-manipulation focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
                     favorites.includes(ex.id) ? "text-accent" : "text-muted"
                   }`}
                 >

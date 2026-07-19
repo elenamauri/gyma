@@ -7,6 +7,7 @@ import type { Exercise } from "@/lib/types";
 import { exerciseImageUrl, getExerciseById } from "@/lib/exercises";
 import { useAppStore } from "@/lib/store";
 import { Button } from "@/components/ui/primitives";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 export default function ExerciseDetailPage() {
   const params = useParams();
@@ -34,7 +35,7 @@ export default function ExerciseDetailPage() {
 
   if (!exercise) {
     return (
-      <div>
+      <div className="space-y-3">
         <p>Esercizio non trovato.</p>
         <Link href="/catalog" className="text-accent underline">
           Torna al catalogo
@@ -47,44 +48,38 @@ export default function ExerciseDetailPage() {
   const img = exercise.images[0];
 
   return (
-    <div className="space-y-6">
-      <Link href="/catalog" className="text-sm text-muted hover:text-ink">
-        ← Catalogo
-      </Link>
-
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">
-            {exercise.name}
-          </h1>
-          <p className="mt-1 text-sm text-muted">
-            {exercise.level} · {exercise.category}
-            {exercise.equipment ? ` · ${exercise.equipment}` : ""}
-          </p>
-        </div>
-        <Button type="button" variant="ghost" onClick={() => toggleFavorite(exercise.id)}>
-          {isFav ? "★ Preferito" : "☆ Preferito"}
-        </Button>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        title={exercise.name}
+        description={`${exercise.level} · ${exercise.category}${
+          exercise.equipment ? ` · ${exercise.equipment}` : ""
+        }`}
+        backHref="/catalog"
+        backLabel="Catalogo"
+        action={
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => toggleFavorite(exercise.id)}
+            aria-label={isFav ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
+          >
+            {isFav ? "★" : "☆"}
+          </Button>
+        }
+      />
 
       {img && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={exerciseImageUrl(img)}
           alt={exercise.name}
-          className="w-full max-w-md border border-hairline object-cover"
+          className="w-full border border-hairline object-cover"
         />
       )}
 
-      <div className="grid gap-6 sm:grid-cols-2">
-        <MetaBlock
-          title="Muscoli primari"
-          items={exercise.primaryMuscles}
-        />
-        <MetaBlock
-          title="Muscoli secondari"
-          items={exercise.secondaryMuscles}
-        />
+      <div className="space-y-4">
+        <MetaBlock title="Muscoli primari" items={exercise.primaryMuscles} />
+        <MetaBlock title="Muscoli secondari" items={exercise.secondaryMuscles} />
       </div>
 
       <section>
@@ -104,7 +99,7 @@ export default function ExerciseDetailPage() {
 function MetaBlock({ title, items }: { title: string; items: string[] }) {
   return (
     <div>
-      <h2 className="mb-2 text-xs uppercase tracking-wide text-muted">{title}</h2>
+      <h2 className="mb-1 text-xs uppercase tracking-wide text-muted">{title}</h2>
       {items.length === 0 ? (
         <p className="text-sm text-muted">—</p>
       ) : (

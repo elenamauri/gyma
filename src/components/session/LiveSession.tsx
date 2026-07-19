@@ -354,28 +354,28 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-3xl flex-col px-4 pb-8 pt-4">
-      <div className="mb-4 flex items-center justify-between gap-3 border-b border-hairline pb-3">
-        <div className="min-w-0">
-          <div className="font-display text-sm font-bold tracking-wide text-muted">
-            GYMA · LIVE
+    <div className="mx-auto flex min-h-dvh max-w-lg flex-col px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-[calc(1rem+env(safe-area-inset-top))]">
+      <div className="mb-4 space-y-3 border-b border-hairline pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="font-display text-xs font-bold tracking-wide text-muted">
+              GYMA · LIVE
+            </div>
+            <div className="truncate text-sm font-medium">{session.routineName}</div>
           </div>
-          <div className="truncate text-sm">{session.routineName}</div>
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="flex items-center gap-1.5 text-xs text-muted">
-            <input
-              type="checkbox"
-              checked={wakeLockOn}
-              onChange={(e) => setWakeLockOn(e.target.checked)}
-              className="accent-accent"
-            />
-            Schermo acceso
-          </label>
           <Button type="button" variant="ghost" onClick={abandonSession}>
             Esci
           </Button>
         </div>
+        <label className="flex min-h-11 items-center gap-2 text-sm text-muted">
+          <input
+            type="checkbox"
+            checked={wakeLockOn}
+            onChange={(e) => setWakeLockOn(e.target.checked)}
+            className="h-5 w-5 accent-accent"
+          />
+          Schermo sempre acceso
+        </label>
       </div>
 
       <RestTimerBar
@@ -400,24 +400,24 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
             <Mono className="text-sm text-muted">
               {exerciseIndex + 1} / {session.exercises.length}
             </Mono>
-            <div className="flex gap-2 text-xs">
+            <div className="flex flex-wrap gap-2 text-sm">
               <button
                 type="button"
-                className="text-muted underline underline-offset-2 hover:text-ink"
+                className="min-h-11 border border-hairline px-3 text-muted hover:text-ink touch-manipulation"
                 onClick={() => setPickerMode("replace")}
               >
                 Sostituisci
               </button>
               <button
                 type="button"
-                className="text-muted underline underline-offset-2 hover:text-ink"
+                className="min-h-11 border border-hairline px-3 text-muted hover:text-ink touch-manipulation"
                 onClick={() => setPickerMode("add")}
               >
                 + Esercizio
               </button>
               <button
                 type="button"
-                className="text-muted underline underline-offset-2 hover:text-accent"
+                className="min-h-11 border border-hairline px-3 text-muted hover:text-accent touch-manipulation"
                 onClick={removeCurrentExercise}
               >
                 Rimuovi
@@ -652,7 +652,7 @@ function SetsBlock({
                       type="number"
                       inputMode="decimal"
                       step="any"
-                      className={`font-mono text-2xl ${isActive ? "text-accent" : ""}`}
+                      className={`font-mono text-3xl ${isActive ? "text-accent" : ""}`}
                       value={displayW ?? ""}
                       onChange={(e) => {
                         const v =
@@ -670,7 +670,7 @@ function SetsBlock({
                     <Input
                       type="number"
                       inputMode="numeric"
-                      className={`font-mono text-2xl ${isActive ? "text-accent" : ""}`}
+                      className={`font-mono text-3xl ${isActive ? "text-accent" : ""}`}
                       value={set.reps}
                       onChange={(e) =>
                         onUpdateSet(index, { reps: Number(e.target.value) || 0 })

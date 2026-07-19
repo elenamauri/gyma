@@ -57,14 +57,7 @@ export function HistoryPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="font-display text-3xl font-bold tracking-tight">Storico</h1>
-        <p className="mt-1 text-sm text-muted">
-          Sessioni passate, streak e calendario di costanza.
-        </p>
-      </div>
-
+    <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 border-y border-hairline py-4">
         <div>
           <div className="text-xs uppercase tracking-wide text-muted">Streak</div>
@@ -93,7 +86,7 @@ export function HistoryPage() {
       ) : (
         <ul className="divide-y divide-hairline">
           {completed.map((s) => (
-            <li key={s.id} className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <li key={s.id} className="flex flex-col gap-3 py-4">
               <Link
                 href={`/history/${s.id}`}
                 className="min-w-0 hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
@@ -109,15 +102,19 @@ export function HistoryPage() {
                   {s.exercises.length} esercizi · {s.type}
                 </div>
               </Link>
-              <Button type="button" variant="ghost" onClick={() => repeatSession(s)}>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={() => repeatSession(s)}
+              >
                 Ripeti
               </Button>
             </li>
           ))}
         </ul>
       )}
-
-      </div>
+    </div>
   );
 }
 

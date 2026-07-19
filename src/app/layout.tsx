@@ -23,17 +23,29 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GYMA — Workout Tracker",
+  title: "GYMA",
   description:
-    "Tracker di allenamento minimal: catalogo esercizi, routine, sessioni live e progressi. Sync cloud opzionale gratis.",
+    "Tracker di allenamento minimal: catalogo, routine, sessioni live e progressi.",
   applicationName: "GYMA",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "GYMA",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
+  },
 };
 
 export const viewport: Viewport = {
   themeColor: "#FAFAF8",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
+  viewportFit: "cover",
+  colorScheme: "light",
 };
 
 export default function RootLayout({
@@ -44,7 +56,7 @@ export default function RootLayout({
   return (
     <html lang="it">
       <body
-        className={`${display.variable} ${body.variable} ${mono.variable} font-body antialiased`}
+        className={`${display.variable} ${body.variable} ${mono.variable} font-body antialiased overscroll-none`}
       >
         <AuthProvider>
           <AppStoreProvider>

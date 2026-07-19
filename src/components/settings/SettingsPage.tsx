@@ -74,11 +74,9 @@ export function SettingsPage() {
   return (
     <div className="space-y-10">
       <div>
-        <h1 className="font-display text-3xl font-bold tracking-tight">
-          Impostazioni
-        </h1>
+        <h1 className="font-display text-3xl font-bold tracking-tight">Utente</h1>
         <p className="mt-1 text-sm text-muted">
-          Account cloud, unità, notifiche e backup.
+          Account, preferenze e backup.
         </p>
       </div>
 

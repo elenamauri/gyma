@@ -65,13 +65,6 @@ export function ProgressPage() {
 
   return (
     <div className="space-y-10">
-      <div>
-        <h1 className="font-display text-3xl font-bold tracking-tight">Progressi</h1>
-        <p className="mt-1 text-sm text-muted">
-          Progressione carichi e peso corporeo nel tempo.
-        </p>
-      </div>
-
       <section>
         <h2 className="mb-3 font-display text-lg font-bold border-b border-hairline pb-2">
           Progressione esercizio
@@ -115,27 +108,30 @@ export function ProgressPage() {
                   }))}
                   unit={settings.unit}
                 />
-                <table className="w-full text-left text-sm">
+                <table className="mt-4 w-full text-left text-sm">
                   <thead>
                     <tr className="border-b border-hairline text-xs uppercase text-muted">
                       <th className="py-2 font-normal">Data</th>
                       <th className="py-2 font-normal">Max</th>
-                      <th className="py-2 font-normal">Volume</th>
+                      <th className="py-2 font-normal">Vol</th>
                     </tr>
                   </thead>
                   <tbody className="font-mono tabular-nums">
-                    {[...series].reverse().map((p) => (
+                    {[...series].reverse().slice(0, 12).map((p) => (
                       <tr key={p.date} className="border-b border-hairline">
-                        <td className="py-2">
-                          {new Date(p.date).toLocaleDateString("it-IT")}
+                        <td className="py-3">
+                          {new Date(p.date).toLocaleDateString("it-IT", {
+                            day: "2-digit",
+                            month: "2-digit",
+                          })}
                         </td>
-                        <td className="py-2">
+                        <td className="py-3">
                           {formatWeight(
                             displayWeight(p.maxWeight, settings.unit),
                             settings.unit,
                           )}
                         </td>
-                        <td className="py-2">
+                        <td className="py-3">
                           {formatWeight(
                             displayWeight(p.volume, settings.unit),
                             settings.unit,

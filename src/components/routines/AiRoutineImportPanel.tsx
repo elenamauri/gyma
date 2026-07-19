@@ -60,8 +60,7 @@ export function AiRoutineImportPanel() {
   }
 
   return (
-    <div className="space-y-4 border-t border-hairline pt-6">
-      <h2 className="font-display text-lg font-bold">Import da Claude (AI)</h2>
+    <div className="space-y-4">
       <p className="text-sm text-muted">
         Copia il prompt, chiedi a Claude una routine, poi incolla il JSON qui.
         I nomi vengono abbinati al catalogo con fuzzy matching.

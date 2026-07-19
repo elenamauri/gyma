@@ -12,11 +12,12 @@ import {
   Select,
   Textarea,
 } from "@/components/ui/primitives";
-import { AccountPanel } from "@/components/settings/AccountPanel";
 
-export function SettingsPage() {
-  const { ready, configured, user } = useAuth();
+/** Preferenze app: unità, recupero, backup, export AI. */
+export function AppSettingsPage() {
+  const { configured } = useAuth();
   const {
+    ready,
     settings,
     updateSettings,
     exportData,
@@ -77,46 +78,8 @@ export function SettingsPage() {
     return <p className="text-sm text-muted">Caricamento…</p>;
   }
 
-  // Non loggato: login + nome locale
-  if (!user) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">Utente</h1>
-          <p className="mt-1 text-sm text-muted">
-            Accedi per sincronizzare i tuoi allenamenti.
-          </p>
-        </div>
-        <AccountPanel loginOnly />
-        <section className="space-y-4">
-          <h2 className="font-display text-lg font-bold border-b border-hairline pb-2">
-            Preferenze locali
-          </h2>
-          <div>
-            <Label htmlFor="display-name-local">Nome (dashboard)</Label>
-            <Input
-              id="display-name-local"
-              value={settings.displayName ?? ""}
-              onChange={(e) => updateSettings({ displayName: e.target.value })}
-              placeholder="Come vuoi essere chiamato"
-            />
-          </div>
-        </section>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-10">
-      <div>
-        <h1 className="font-display text-3xl font-bold tracking-tight">Utente</h1>
-        <p className="mt-1 text-sm text-muted">
-          Account, preferenze e backup.
-        </p>
-      </div>
-
-      <AccountPanel />
-
       <section className="space-y-4">
         <h2 className="font-display text-lg font-bold border-b border-hairline pb-2">
           Preferenze
@@ -183,7 +146,7 @@ export function SettingsPage() {
           Backup dati
         </h2>
         <p className="text-sm text-muted">
-          I dati si sincronizzano sul cloud. L’export JSON è un backup extra.
+          L’export JSON è un backup extra oltre alla sync cloud.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button type="button" onClick={downloadExport}>

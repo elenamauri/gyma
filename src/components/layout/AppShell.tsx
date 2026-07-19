@@ -33,9 +33,25 @@ const TABS = [
 function resolveChrome(
   pathname: string,
   returnTo: string | null,
-): { title: string; backHref?: string } {
+): {
+  title: string;
+  backHref?: string;
+  rightHref?: string;
+  rightLabel?: string;
+  rightIcon?: "settings" | "import";
+} {
   if (pathname === "/") return { title: "" };
-  if (pathname === "/routines") return { title: "Routine" };
+  if (pathname === "/routines") {
+    return {
+      title: "Routine",
+      rightHref: "/routines/import",
+      rightLabel: "Import da Claude",
+      rightIcon: "import",
+    };
+  }
+  if (pathname === "/routines/import") {
+    return { title: "Import AI", backHref: "/routines" };
+  }
   if (pathname === "/routines/new") {
     return { title: "Nuova routine", backHref: "/routines" };
   }
@@ -61,7 +77,17 @@ function resolveChrome(
     return { title: "Sessione", backHref: "/history" };
   }
   if (pathname === "/progress") return { title: "Progressi", backHref: "/" };
-  if (pathname === "/settings") return { title: "Utente" };
+  if (pathname === "/settings/preferences") {
+    return { title: "Impostazioni", backHref: "/settings" };
+  }
+  if (pathname === "/settings") {
+    return {
+      title: "Utente",
+      rightHref: "/settings/preferences",
+      rightLabel: "Impostazioni",
+      rightIcon: "settings",
+    };
+  }
   if (pathname.startsWith("/auth")) {
     return { title: "Accesso", backHref: "/settings" };
   }
@@ -144,7 +170,10 @@ function TopBarFallback() {
 function AppTopBar() {
   const pathname = usePathname();
   const params = useSearchParams();
-  const { title, backHref } = resolveChrome(pathname, params.get("return"));
+  const { title, backHref, rightHref, rightLabel, rightIcon } = resolveChrome(
+    pathname,
+    params.get("return"),
+  );
 
   return (
     <header className="sticky top-0 z-40 border-b border-hairline bg-chalk/95 pt-[env(safe-area-inset-top)] backdrop-blur-sm">
@@ -163,9 +192,58 @@ function AppTopBar() {
         <h1 className="truncate text-center font-display text-base font-bold tracking-tight">
           {title}
         </h1>
-        <span aria-hidden />
+        {rightHref ? (
+          <Link
+            href={rightHref}
+            className="flex h-11 w-11 items-center justify-center text-muted touch-manipulation hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            aria-label={rightLabel ?? "Azione"}
+          >
+            {rightIcon === "import" ? <IconImport /> : <IconSettings />}
+          </Link>
+        ) : (
+          <span aria-hidden />
+        )}
       </div>
     </header>
+  );
+}
+
+function IconImport() {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden
+      className="stroke-current"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 3v12" />
+      <path d="M7 10l5 5 5-5" />
+      <path d="M5 19h14" />
+    </svg>
+  );
+}
+
+function IconSettings() {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden
+      className="stroke-current"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+      <path d="M19.4 13.5a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V19.5a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H4.5a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V4.5a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1h.09a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
+    </svg>
   );
 }
 

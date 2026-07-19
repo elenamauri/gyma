@@ -1,12 +1,15 @@
 "use client";
 
 import {
+  useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   DndContext,
   closestCenter,
@@ -453,10 +456,72 @@ function RowMenu({
   onToggle: () => void;
   onReplace?: () => void;
 }) {
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) {
+      setPos(null);
+      return;
+    }
+    const rect = btnRef.current.getBoundingClientRect();
+    setPos({
+      top: rect.bottom + 4,
+      right: window.innerWidth - rect.right,
+    });
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onScroll() {
+      onToggle();
+    }
+    window.addEventListener("scroll", onScroll, true);
+    return () => window.removeEventListener("scroll", onScroll, true);
+  }, [open, onToggle]);
+
   if (!onReplace) return null;
+
+  const menu =
+    open && pos
+      ? createPortal(
+          <>
+            <button
+              type="button"
+              className="fixed inset-0 z-[200]"
+              aria-label="Chiudi menu"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggle();
+              }}
+            />
+            <div
+              role="menu"
+              className="fixed z-[210] min-w-[10rem] border border-hairline bg-chalk py-1 shadow-lg"
+              style={{ top: pos.top, right: pos.right }}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                className="flex min-h-11 w-full items-center px-3 text-left text-sm touch-manipulation hover:bg-ink/[0.03]"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggle();
+                  onReplace();
+                }}
+              >
+                Sostituisci
+              </button>
+            </div>
+          </>,
+          document.body,
+        )
+      : null;
+
   return (
     <div className="relative shrink-0">
       <button
+        ref={btnRef}
         type="button"
         className="flex h-9 w-9 items-center justify-center text-muted touch-manipulation"
         aria-label="Opzioni esercizio"
@@ -468,21 +533,7 @@ function RowMenu({
       >
         ⋯
       </button>
-      {open && (
-        <div className="absolute right-0 top-10 z-20 min-w-[10rem] border border-hairline bg-chalk py-1 shadow-md">
-          <button
-            type="button"
-            className="flex min-h-11 w-full items-center px-3 text-left text-sm touch-manipulation hover:bg-ink/[0.03]"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggle();
-              onReplace();
-            }}
-          >
-            Sostituisci
-          </button>
-        </div>
-      )}
+      {menu}
     </div>
   );
 }

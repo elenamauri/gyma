@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
+import { useAuth } from "@/lib/auth";
 
 const TABS = [
   {
@@ -83,6 +84,9 @@ function resolveChrome(
   if (pathname === "/catalog") return { title: "Catalogo", backHref: "/" };
   if (/^\/catalog\//.test(pathname)) {
     return { title: "Esercizio", backHref: "/catalog" };
+  }
+  if (pathname === "/session/start") {
+    return { title: "Inizia allenamento", backHref: "/" };
   }
   if (pathname === "/history") return { title: "Storico", backHref: "/" };
   if (/^\/history\//.test(pathname)) {
@@ -182,11 +186,16 @@ function TopBarFallback() {
 function AppTopBar() {
   const pathname = usePathname();
   const params = useSearchParams();
-  const { title, backHref, rightHref, rightLabel, rightIcon } = resolveChrome(
+  const { user } = useAuth();
+  const chrome = resolveChrome(
     pathname,
     params.get("return"),
     params.get("programId"),
   );
+  const showSettingsGear =
+    chrome.rightIcon === "settings" ? Boolean(user) : Boolean(chrome.rightHref);
+  const rightHref = showSettingsGear ? chrome.rightHref : undefined;
+  const { title, backHref, rightLabel, rightIcon } = chrome;
 
   return (
     <header className="sticky top-0 z-40 border-b border-hairline bg-chalk/95 pt-[env(safe-area-inset-top)] backdrop-blur-sm">

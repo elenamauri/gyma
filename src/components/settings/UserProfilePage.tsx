@@ -83,6 +83,22 @@ export function UserProfilePage() {
     return <p className="text-sm text-muted">Caricamento…</p>;
   }
 
+  if (!user) {
+    return (
+      <div className="space-y-6">
+        <section>
+          <h1 className="font-display text-3xl font-bold tracking-tight">
+            Accedi
+          </h1>
+          <p className="mt-1 text-sm text-muted">
+            Accedi per sincronizzare i tuoi allenamenti e vedere il profilo.
+          </p>
+        </section>
+        <AccountPanel loginOnly />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <section>
@@ -90,7 +106,7 @@ export function UserProfilePage() {
           {displayName ?? "Il tuo profilo"}
         </h1>
         <p className="mt-1 text-sm text-muted">
-          {user?.email ?? "Dati locali su questo dispositivo"}
+          {user.email}
         </p>
       </section>
 

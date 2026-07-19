@@ -5,12 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
-import {
-  createEmptySession,
-  createSessionFromRoutine,
-  getActiveSessionId,
-} from "@/components/session/LiveSession";
-import { Button, EmptyState, Mono } from "@/components/ui/primitives";
+import { getActiveSessionId } from "@/components/session/LiveSession";
+import { EmptyState, Mono } from "@/components/ui/primitives";
 import { CalendarStreak } from "@/components/history/CalendarStreak";
 import {
   Sparkline,
@@ -26,14 +22,11 @@ export function DashboardHome() {
   const {
     ready,
     routines,
-    programs,
     sessions,
     settings,
     bodyweightLog,
-    upsertSession,
   } = useAppStore();
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [startOpen, setStartOpen] = useState(false);
 
   useEffect(() => {
     setActiveId(getActiveSessionId());
@@ -130,28 +123,12 @@ export function DashboardHome() {
     [bodyweightLog],
   );
 
-  function startRoutine(routineId: string) {
-    const routine = routines.find((r) => r.id === routineId);
-    if (!routine) return;
-    const session = createSessionFromRoutine(routine);
-    upsertSession(session);
-    setStartOpen(false);
-    router.push(`/session/live?id=${session.id}`);
-  }
-
-  function startEmpty() {
-    const session = createEmptySession();
-    upsertSession(session);
-    setStartOpen(false);
-    router.push(`/session/live?id=${session.id}`);
-  }
-
   function onFabClick() {
     if (hasActive) {
       router.push(`/session/live?id=${activeId}`);
       return;
     }
-    setStartOpen(true);
+    router.push("/session/start");
   }
 
   if (!ready) {
@@ -279,15 +256,6 @@ export function DashboardHome() {
         {hasActive ? "Riprendi" : "Inizia allenamento"}
       </button>
 
-      {startOpen && (
-        <StartWorkoutSheet
-          programs={programs}
-          routines={routines}
-          onClose={() => setStartOpen(false)}
-          onFree={startEmpty}
-          onRoutine={startRoutine}
-        />
-      )}
     </div>
   );
 }
@@ -305,132 +273,6 @@ function Stat({
     <div>
       <div className="text-xs uppercase tracking-wide text-muted">{label}</div>
       <Mono className={`text-2xl ${accent ? "text-accent" : ""}`}>{value}</Mono>
-    </div>
-  );
-}
-
-function StartWorkoutSheet({
-  programs,
-  routines,
-  onClose,
-  onFree,
-  onRoutine,
-}: {
-  programs: Array<{ id: string; name: string }>;
-  routines: Array<{
-    id: string;
-    name: string;
-    type: string;
-    programId: string;
-    exercises: unknown[];
-  }>;
-  onClose: () => void;
-  onFree: () => void;
-  onRoutine: (id: string) => void;
-}) {
-  const grouped = programs
-    .map((p) => ({
-      program: p,
-      routines: routines.filter((r) => r.programId === p.id),
-    }))
-    .filter((g) => g.routines.length > 0);
-
-  return (
-    <div className="fixed inset-0 z-[60] flex flex-col justify-end">
-      <button
-        type="button"
-        className="absolute inset-0 bg-ink/40"
-        aria-label="Chiudi"
-        onClick={onClose}
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="start-workout-title"
-        className="relative mx-auto w-full max-w-lg border-t border-hairline bg-chalk px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4 shadow-xl"
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h2
-            id="start-workout-title"
-            className="font-display text-xl font-bold"
-          >
-            Inizia allenamento
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-10 w-10 items-center justify-center text-muted touch-manipulation"
-            aria-label="Chiudi"
-          >
-            ✕
-          </button>
-        </div>
-
-        <Button
-          type="button"
-          variant="accent"
-          className="w-full"
-          onClick={onFree}
-        >
-          Sessione libera
-        </Button>
-
-        <div className="mt-6">
-          <div className="mb-2 flex items-end justify-between">
-            <h3 className="text-xs uppercase tracking-wide text-muted">
-              Oppure una routine
-            </h3>
-            <Link
-              href="/routines"
-              className="text-xs text-muted hover:text-ink"
-              onClick={onClose}
-            >
-              Programmi
-            </Link>
-          </div>
-          {grouped.length === 0 ? (
-            <EmptyState
-              title="Nessuna routine"
-              description="Crea un programma e aggiungi le routine."
-              action={
-                <Link href="/routines/programs/new" onClick={onClose}>
-                  <Button type="button">Crea programma</Button>
-                </Link>
-              }
-            />
-          ) : (
-            <div className="max-h-72 space-y-4 overflow-y-auto">
-              {grouped.map(({ program, routines: list }) => (
-                <div key={program.id}>
-                  <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">
-                    {program.name}
-                  </div>
-                  <ul className="divide-y divide-hairline">
-                    {list.map((r) => (
-                      <li key={r.id}>
-                        <button
-                          type="button"
-                          onClick={() => onRoutine(r.id)}
-                          className="flex w-full items-center justify-between gap-3 py-3 text-left touch-manipulation hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
-                        >
-                          <div className="min-w-0">
-                            <div className="truncate font-medium">{r.name}</div>
-                            <div className="text-xs text-muted">
-                              {r.type === "reps" ? "Serie/reps" : "A tempo"} ·{" "}
-                              {r.exercises.length} esercizi
-                            </div>
-                          </div>
-                          <span className="text-sm text-accent">Avvia</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { buildAiSummary } from "@/lib/ai";
@@ -15,7 +16,8 @@ import {
 
 /** Preferenze app: unità, recupero, backup, export AI. */
 export function AppSettingsPage() {
-  const { configured } = useAuth();
+  const router = useRouter();
+  const { configured, ready: authReady, user } = useAuth();
   const {
     ready,
     settings,
@@ -28,6 +30,14 @@ export function AppSettingsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [aiSummary, setAiSummary] = useState("");
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (authReady && !user) router.replace("/settings");
+  }, [authReady, user, router]);
+
+  if (!authReady || !user) {
+    return <p className="text-sm text-muted">Caricamento…</p>;
+  }
 
   function downloadExport() {
     const data = exportData();

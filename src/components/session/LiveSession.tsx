@@ -148,19 +148,20 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
 
   useWakeLock(wakeLockOn && session?.status === "active");
 
+  const startedAt = session?.startedAt;
+  const sessionStatus = session?.status;
+
   useEffect(() => {
-    if (!session || session.status !== "active") return;
+    if (!startedAt || sessionStatus !== "active") return;
     const tick = () => {
       setElapsed(
-        Math.floor(
-          (Date.now() - new Date(session.startedAt).getTime()) / 1000,
-        ),
+        Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000),
       );
     };
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [session?.id, session?.startedAt, session?.status]);
+  }, [session?.id, startedAt, sessionStatus]);
 
   const rest = useRestTimer({
     soundEnabled: settings.soundEnabled,
@@ -497,10 +498,9 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
               eager
               exerciseId={current.exerciseId}
               exerciseName={current.exerciseName}
-              imagePath={
-                catalog.find((c) => c.id === current.exerciseId)?.images[0]
-              }
+              imagePath={currentCatalog?.images[0]}
               primaryMuscles={current.primaryMuscles}
+              secondaryMuscles={currentCatalog?.secondaryMuscles}
             />
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-2">

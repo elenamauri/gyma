@@ -128,6 +128,8 @@ export interface Settings {
   defaultRestSeconds: number;
   soundEnabled: boolean;
   vibrationEnabled: boolean;
+  /** Nome mostrato in dashboard (“Ciao …”). */
+  displayName?: string;
 }
 
 export interface AppData {

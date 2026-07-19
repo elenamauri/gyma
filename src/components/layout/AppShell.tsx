@@ -34,7 +34,7 @@ function resolveChrome(
   pathname: string,
   returnTo: string | null,
 ): { title: string; backHref?: string } {
-  if (pathname === "/") return { title: "Home" };
+  if (pathname === "/") return { title: "" };
   if (pathname === "/routines") return { title: "Routine" };
   if (pathname === "/routines/new") {
     return { title: "Nuova routine", backHref: "/routines" };
@@ -77,11 +77,13 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const isLive = pathname.startsWith("/session/live");
+  const isHome = pathname === "/";
   const showNav = !hideNav && !isLive;
+  const showTopBar = showNav && !isHome;
 
   return (
     <div className="min-h-dvh bg-chalk text-ink">
-      {showNav && (
+      {showTopBar && (
         <Suspense fallback={<TopBarFallback />}>
           <AppTopBar />
         </Suspense>
@@ -95,7 +97,7 @@ export function AppShell({
                 showNav
                   ? "pb-[calc(4.75rem+env(safe-area-inset-bottom))]"
                   : "pb-[env(safe-area-inset-bottom)]"
-              }`
+              } ${isHome ? "pt-[max(1rem,env(safe-area-inset-top))]" : ""}`
         }
       >
         {children}

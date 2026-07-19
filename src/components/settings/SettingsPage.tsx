@@ -77,7 +77,7 @@ export function SettingsPage() {
     return <p className="text-sm text-muted">Caricamento…</p>;
   }
 
-  // Non loggato: solo login / registrazione
+  // Non loggato: login + nome locale
   if (!user) {
     return (
       <div className="space-y-6">
@@ -88,6 +88,20 @@ export function SettingsPage() {
           </p>
         </div>
         <AccountPanel loginOnly />
+        <section className="space-y-4">
+          <h2 className="font-display text-lg font-bold border-b border-hairline pb-2">
+            Preferenze locali
+          </h2>
+          <div>
+            <Label htmlFor="display-name-local">Nome (dashboard)</Label>
+            <Input
+              id="display-name-local"
+              value={settings.displayName ?? ""}
+              onChange={(e) => updateSettings({ displayName: e.target.value })}
+              placeholder="Come vuoi essere chiamato"
+            />
+          </div>
+        </section>
       </div>
     );
   }
@@ -107,6 +121,15 @@ export function SettingsPage() {
         <h2 className="font-display text-lg font-bold border-b border-hairline pb-2">
           Preferenze
         </h2>
+        <div>
+          <Label htmlFor="display-name">Nome (dashboard)</Label>
+          <Input
+            id="display-name"
+            value={settings.displayName ?? ""}
+            onChange={(e) => updateSettings({ displayName: e.target.value })}
+            placeholder="Come vuoi essere chiamato"
+          />
+        </div>
         <div>
           <Label htmlFor="unit">Unità di misura</Label>
           <Select

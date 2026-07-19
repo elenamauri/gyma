@@ -13,6 +13,7 @@ import {
   Mono,
   Select,
 } from "@/components/ui/primitives";
+import { Sparkline } from "@/components/progress/Sparkline";
 
 export function ProgressPage() {
   const { sessions, bodyweightLog, setBodyweightLog, settings } = useAppStore();
@@ -211,58 +212,6 @@ export function ProgressPage() {
           </div>
         )}
       </section>
-    </div>
-  );
-}
-
-function Sparkline({
-  label,
-  points,
-  unit,
-}: {
-  label: string;
-  points: Array<{ date: string; value: number }>;
-  unit: string;
-}) {
-  const values = points.map((p) => p.value).filter((v) => v > 0);
-  if (values.length < 1) return null;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  const w = 320;
-  const h = 80;
-  const pad = 4;
-
-  const coords = points
-    .filter((p) => p.value > 0)
-    .map((p, i, arr) => {
-      const x = pad + (i / Math.max(arr.length - 1, 1)) * (w - pad * 2);
-      const y = h - pad - ((p.value - min) / range) * (h - pad * 2);
-      return `${x},${y}`;
-    })
-    .join(" ");
-
-  return (
-    <div>
-      <div className="mb-1 flex items-baseline justify-between">
-        <span className="text-xs uppercase tracking-wide text-muted">{label}</span>
-        <Mono className="text-sm">
-          {formatWeight(values[values.length - 1], unit as "kg")} {unit}
-        </Mono>
-      </div>
-      <svg
-        viewBox={`0 0 ${w} ${h}`}
-        className="w-full border border-hairline"
-        role="img"
-        aria-label={label}
-      >
-        <polyline
-          fill="none"
-          stroke="#E1442C"
-          strokeWidth="1.5"
-          points={coords}
-        />
-      </svg>
     </div>
   );
 }

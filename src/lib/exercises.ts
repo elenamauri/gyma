@@ -12,6 +12,65 @@ let indexCache: ExerciseIndex | null = null;
 let fullCache: Exercise[] | null = null;
 let fuseCache: Fuse<ExerciseIndexEntry> | null = null;
 
+type GifMap = {
+  byExerciseId: Record<string, string>;
+  byNormalizedName: Record<string, string>;
+  attribution?: string;
+};
+
+let gifMapCache: GifMap | null = null;
+let gifMapPromise: Promise<GifMap> | null = null;
+
+function normalizeExerciseName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export async function loadGifMap(): Promise<GifMap> {
+  if (gifMapCache) return gifMapCache;
+  if (!gifMapPromise) {
+    gifMapPromise = fetch("/data/gif-map.json")
+      .then((res) => res.json() as Promise<GifMap>)
+      .then((data) => {
+        gifMapCache = data;
+        return data;
+      })
+      .catch(() => {
+        const empty: GifMap = { byExerciseId: {}, byNormalizedName: {} };
+        gifMapCache = empty;
+        return empty;
+      });
+  }
+  return gifMapPromise;
+}
+
+/** ExerciseDB animated demo GIF (CDN). Empty if no match. */
+export async function exerciseGifUrl(
+  exerciseId?: string,
+  exerciseName?: string,
+): Promise<string> {
+  const map = await loadGifMap();
+  if (exerciseId && map.byExerciseId[exerciseId]) {
+    return map.byExerciseId[exerciseId];
+  }
+  if (exerciseName) {
+    const key = normalizeExerciseName(exerciseName);
+    if (map.byNormalizedName[key]) return map.byNormalizedName[key];
+  }
+  return "";
+}
+
+export function gifAttribution(): string {
+  return (
+    gifMapCache?.attribution ??
+    "Exercise GIFs © AscendAPI / ExerciseDB — non-commercial use"
+  );
+}
+
 export async function loadExerciseIndex(): Promise<ExerciseIndex> {
   if (indexCache) return indexCache;
   const res = await fetch("/data/exercises-index.json");

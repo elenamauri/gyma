@@ -4,10 +4,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import type { Exercise } from "@/lib/types";
-import { exerciseImageUrl, getExerciseById } from "@/lib/exercises";
+import { getExerciseById } from "@/lib/exercises";
 import { useAppStore } from "@/lib/store";
 import { Button } from "@/components/ui/primitives";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { MuscleMap } from "@/components/exercises/MuscleMap";
+import { ExerciseThumb } from "@/components/exercises/ExerciseThumb";
 
 export default function ExerciseDetailPage() {
   const params = useParams();
@@ -45,7 +47,6 @@ export default function ExerciseDetailPage() {
   }
 
   const isFav = favorites.includes(exercise.id);
-  const img = exercise.images[0];
 
   return (
     <div className="space-y-5">
@@ -68,14 +69,36 @@ export default function ExerciseDetailPage() {
         }
       />
 
-      {img && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={exerciseImageUrl(img)}
-          alt={exercise.name}
-          className="w-full border border-hairline object-cover"
+      <ExerciseThumb
+        eager
+        size="lg"
+        exerciseId={exercise.id}
+        exerciseName={exercise.name}
+        imagePath={exercise.images[0]}
+        primaryMuscles={exercise.primaryMuscles}
+        secondaryMuscles={exercise.secondaryMuscles}
+      />
+      <p className="text-center text-[10px] text-muted">
+        Demo GIF:{" "}
+        <a
+          href="https://github.com/ExerciseDB/exercisedb-api"
+          className="underline underline-offset-2"
+          target="_blank"
+          rel="noreferrer"
+        >
+          ExerciseDB / AscendAPI
+        </a>
+      </p>
+
+      <section className="border-y border-hairline py-4">
+        <h2 className="mb-3 text-center text-xs uppercase tracking-wide text-muted">
+          Muscoli coinvolti
+        </h2>
+        <MuscleMap
+          primaryMuscles={exercise.primaryMuscles}
+          secondaryMuscles={exercise.secondaryMuscles}
         />
-      )}
+      </section>
 
       <div className="space-y-4">
         <MetaBlock title="Muscoli primari" items={exercise.primaryMuscles} />

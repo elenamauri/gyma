@@ -3,11 +3,11 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { filterExercises } from "@/lib/exercises";
-import { exerciseImageUrl } from "@/lib/exercises";
 import type { CatalogFilters } from "@/lib/exercises";
 import type { ExerciseFacets, ExerciseIndexEntry } from "@/lib/types";
 import type Fuse from "fuse.js";
 import { Input, Select, Label, EmptyState, Mono } from "@/components/ui/primitives";
+import { ExerciseThumb } from "@/components/exercises/ExerciseThumb";
 
 const emptyFilters: CatalogFilters = {
   query: "",
@@ -216,12 +216,14 @@ function QuickSection({
               href={`/catalog/${ex.id}`}
               className="flex items-center gap-3 py-2 hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={exerciseImageUrl(ex.images[0])}
-                alt=""
-                className="h-10 w-10 object-cover opacity-90"
-                loading="lazy"
+              <ExerciseThumb
+                size="sm"
+                exerciseId={ex.id}
+                exerciseName={ex.name}
+                imagePath={ex.images[0]}
+                primaryMuscles={ex.primaryMuscles}
+                secondaryMuscles={ex.secondaryMuscles}
+                className="!h-10 !w-10"
               />
               <div className="min-w-0">
                 <div className="truncate text-sm">{ex.name}</div>

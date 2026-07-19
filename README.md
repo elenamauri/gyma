@@ -6,6 +6,7 @@ Web app di allenamento con Next.js 14 (App Router), TypeScript e Tailwind CSS. C
 
 - Next.js 14 + TypeScript + Tailwind
 - Dataset [free-exercise-db](https://github.com/yuhonas/free-exercise-db) (873 esercizi, pubblico dominio)
+- Demo animate GIF da [ExerciseDB](https://github.com/ExerciseDB/exercisedb-api) / AscendAPI (**solo uso non commerciale** + attribuzione)
 - Fuzzy matching con `fuse.js` per import AI
 - Auth + sync: [Supabase](https://supabase.com) (piano free)
 
@@ -14,11 +15,14 @@ Web app di allenamento con Next.js 14 (App Router), TypeScript e Tailwind CSS. C
 ```bash
 npm install
 npm run index-exercises   # rigenera public/data/exercises-index.json
+npm run index-gifs        # mappa GIF ExerciseDB → public/data/gif-map.json
 cp .env.local.example .env.local   # poi inserisci le chiavi Supabase
 npm run dev
 ```
 
 Apri [http://localhost:3000](http://localhost:3000).
+
+> **GIF ExerciseDB:** circa 70%+ degli esercizi hanno una demo animata via CDN. Uso personale/non commerciale; crediti AscendAPI. Per uso commerciale serve un piano [RapidAPI](https://github.com/ExerciseDB/exercisedb-api).
 
 ## Account cloud gratis (Supabase)
 

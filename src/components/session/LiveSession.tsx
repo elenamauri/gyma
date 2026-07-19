@@ -22,9 +22,48 @@ import {
 import { useAppStore } from "@/lib/store";
 import { useRestTimer } from "@/hooks/useRestTimer";
 import { useWakeLock } from "@/hooks/useWakeLock";
-import { displayWeight, formatDuration, formatWeight, storeWeight } from "@/lib/units";
+import {
+  displayWeight,
+  formatDuration,
+  formatWeight,
+  storeWeight,
+} from "@/lib/units";
 import { RestTimerBar } from "@/components/session/RestTimerBar";
-import { Button, Input, Label, Textarea, Mono } from "@/components/ui/primitives";
+import { ExerciseThumb } from "@/components/exercises/ExerciseThumb";
+import { Button, Input, Mono } from "@/components/ui/primitives";
+
+function formatElapsed(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const rem = s % 60;
+  return `${h}:${m.toString().padStart(2, "0")}:${rem.toString().padStart(2, "0")}`;
+}
+
+function previousSetsForExercise(
+  sessions: Session[],
+  exerciseId: string,
+  currentSessionId: string,
+): LoggedSet[] {
+  const past = [...sessions]
+    .filter((s) => s.id !== currentSessionId && s.status === "completed")
+    .sort((a, b) =>
+      (b.completedAt ?? b.startedAt).localeCompare(a.completedAt ?? a.startedAt),
+    );
+  for (const s of past) {
+    const ex = s.exercises.find((e) => e.exerciseId === exerciseId);
+    const done = ex?.sets.filter((set) => set.completed) ?? [];
+    if (done.length) return done;
+  }
+  return [];
+}
+
+function formatPrevSet(set: LoggedSet | undefined, unit: "kg" | "lb"): string {
+  if (!set) return "—";
+  const w = displayWeight(set.weight, unit);
+  if (w !== undefined) return `${formatWeight(w, unit)}${unit} × ${set.reps}`;
+  return `${set.reps} rip.`;
+}
 
 const ACTIVE_KEY = "gyma:activeSessionId";
 
@@ -104,8 +143,24 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
   const [pickerQuery, setPickerQuery] = useState("");
   const [timedLeft, setTimedLeft] = useState<number | null>(null);
   const [timedRunning, setTimedRunning] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
 
   useWakeLock(wakeLockOn && session?.status === "active");
+
+  useEffect(() => {
+    if (!session || session.status !== "active") return;
+    const tick = () => {
+      setElapsed(
+        Math.floor(
+          (Date.now() - new Date(session.startedAt).getTime()) / 1000,
+        ),
+      );
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [session?.id, session?.startedAt, session?.status]);
 
   const rest = useRestTimer({
     soundEnabled: settings.soundEnabled,
@@ -140,6 +195,30 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
   }, [sessionId]);
 
   const current = session?.exercises[exerciseIndex];
+
+  const liveStats = useMemo(() => {
+    if (!session) return { volume: 0, setsDone: 0 };
+    let volume = 0;
+    let setsDone = 0;
+    for (const ex of session.exercises) {
+      for (const set of ex.sets) {
+        if (!set.completed) continue;
+        setsDone += 1;
+        if (set.weight !== undefined) volume += set.weight * set.reps;
+      }
+    }
+    return { volume, setsDone };
+  }, [session]);
+
+  const previousSets = useMemo(() => {
+    if (!session || !current) return [];
+    return previousSetsForExercise(sessions, current.exerciseId, session.id);
+  }, [sessions, session, current]);
+
+  const currentCatalog = useMemo(() => {
+    if (!current) return null;
+    return catalog.find((e) => e.id === current.exerciseId) ?? null;
+  }, [catalog, current]);
 
   // Timed auto-advance
   useEffect(() => {
@@ -354,28 +433,44 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-lg flex-col px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-[calc(1rem+env(safe-area-inset-top))]">
-      <div className="mb-4 space-y-3 border-b border-hairline pb-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="font-display text-xs font-bold tracking-wide text-muted">
-              GYMA · LIVE
-            </div>
-            <div className="truncate text-sm font-medium">{session.routineName}</div>
-          </div>
-          <Button type="button" variant="ghost" onClick={abandonSession}>
-            Esci
-          </Button>
+    <div className="mx-auto flex min-h-dvh max-w-lg flex-col px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-[calc(0.5rem+env(safe-area-inset-top))]">
+      <header className="flex items-center gap-2 py-2">
+        <button
+          type="button"
+          className="flex h-11 w-11 items-center justify-center text-xl touch-manipulation"
+          aria-label="Esci"
+          onClick={abandonSession}
+        >
+          ⌄
+        </button>
+        <div className="flex flex-1 justify-center text-muted" aria-hidden>
+          ⏱
         </div>
-        <label className="flex min-h-11 items-center gap-2 text-sm text-muted">
-          <input
-            type="checkbox"
-            checked={wakeLockOn}
-            onChange={(e) => setWakeLockOn(e.target.checked)}
-            className="h-5 w-5 accent-accent"
-          />
-          Schermo sempre acceso
-        </label>
+        <Button type="button" variant="accent" onClick={finishSession}>
+          Fine
+        </Button>
+      </header>
+
+      <div className="mb-4 grid grid-cols-3 gap-2 border border-hairline px-3 py-3">
+        <div className="text-center">
+          <div className="text-[10px] uppercase tracking-wide text-muted">
+            Durata
+          </div>
+          <Mono className="text-lg text-accent">{formatElapsed(elapsed)}</Mono>
+        </div>
+        <div className="border-x border-hairline text-center">
+          <div className="text-[10px] uppercase tracking-wide text-muted">
+            Volume
+          </div>
+          <Mono className="text-lg">
+            {formatWeight(displayWeight(liveStats.volume, settings.unit), settings.unit)}{" "}
+            {settings.unit}
+          </Mono>
+        </div>
+        <div className="text-center">
+          <div className="text-[10px] uppercase tracking-wide text-muted">Set</div>
+          <Mono className="text-lg">{liveStats.setsDone}</Mono>
+        </div>
       </div>
 
       <RestTimerBar
@@ -395,45 +490,84 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
           </Button>
         </div>
       ) : current ? (
-        <div className="flex flex-1 flex-col gap-6 pt-6">
-          <div className="flex items-baseline justify-between gap-2">
-            <Mono className="text-sm text-muted">
-              {exerciseIndex + 1} / {session.exercises.length}
-            </Mono>
-            <div className="flex flex-wrap gap-2 text-sm">
-              <button
-                type="button"
-                className="min-h-11 border border-hairline px-3 text-muted hover:text-ink touch-manipulation"
-                onClick={() => setPickerMode("replace")}
-              >
-                Sostituisci
-              </button>
-              <button
-                type="button"
-                className="min-h-11 border border-hairline px-3 text-muted hover:text-ink touch-manipulation"
-                onClick={() => setPickerMode("add")}
-              >
-                + Esercizio
-              </button>
-              <button
-                type="button"
-                className="min-h-11 border border-hairline px-3 text-muted hover:text-accent touch-manipulation"
-                onClick={removeCurrentExercise}
-              >
-                Rimuovi
-              </button>
+        <div className="flex flex-1 flex-col gap-4 pt-2">
+          <div className="flex items-start gap-3">
+            <ExerciseThumb
+              size="sm"
+              eager
+              exerciseId={current.exerciseId}
+              exerciseName={current.exerciseName}
+              imagePath={
+                catalog.find((c) => c.id === current.exerciseId)?.images[0]
+              }
+              primaryMuscles={current.primaryMuscles}
+            />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-2">
+                <h1 className="font-display text-xl font-bold leading-tight tracking-tight">
+                  {current.exerciseName}
+                </h1>
+                <button
+                  type="button"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center text-muted touch-manipulation"
+                  aria-label="Menu esercizio"
+                  onClick={() => setMenuOpen((v) => !v)}
+                >
+                  ⋯
+                </button>
+              </div>
+              {menuOpen && (
+                <div className="mt-1 flex flex-wrap gap-2 text-sm">
+                  <button
+                    type="button"
+                    className="min-h-10 border border-hairline px-2 text-muted touch-manipulation"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setPickerMode("replace");
+                    }}
+                  >
+                    Sostituisci
+                  </button>
+                  <button
+                    type="button"
+                    className="min-h-10 border border-hairline px-2 text-muted touch-manipulation"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setPickerMode("add");
+                    }}
+                  >
+                    + Esercizio
+                  </button>
+                  <button
+                    type="button"
+                    className="min-h-10 border border-hairline px-2 text-muted touch-manipulation"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      removeCurrentExercise();
+                    }}
+                  >
+                    Rimuovi
+                  </button>
+                </div>
+              )}
+              <input
+                className="mt-2 w-full border-0 border-b border-hairline bg-transparent py-1.5 text-sm outline-none placeholder:text-muted focus:border-accent"
+                placeholder="Note…"
+                value={current.notes ?? ""}
+                onChange={(e) => patchCurrent({ notes: e.target.value })}
+              />
+              <p className="mt-2 text-sm text-muted">
+                Timer di recupero:{" "}
+                <span className={rest.running ? "text-accent" : ""}>
+                  {rest.running
+                    ? formatDuration(rest.remaining)
+                    : current.restSeconds > 0
+                      ? `${current.restSeconds}s`
+                      : "Spento"}
+                </span>
+              </p>
             </div>
           </div>
-
-          <h1 className="font-display text-3xl font-bold leading-tight tracking-tight sm:text-4xl">
-            {current.exerciseName}
-          </h1>
-
-          {current.primaryMuscles?.length > 0 && (
-            <p className="text-sm text-muted">
-              {current.primaryMuscles.join(" · ")}
-            </p>
-          )}
 
           {session.type === "timed" ? (
             <TimedBlock
@@ -447,6 +581,7 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
             <SetsBlock
               exercise={current}
               unit={settings.unit}
+              previousSets={previousSets}
               onCompleteSet={completeSet}
               onAddSet={addSet}
               onUpdateSet={(setIndex, patch) => {
@@ -458,59 +593,58 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
             />
           )}
 
-          <div>
-            <Label htmlFor="ex-notes">Note esercizio</Label>
-            <Textarea
-              id="ex-notes"
-              rows={2}
-              placeholder="es. ginocchio fastidioso"
-              value={current.notes ?? ""}
-              onChange={(e) => patchCurrent({ notes: e.target.value })}
-            />
-          </div>
+          {/* Upcoming queue */}
+          {session.exercises.length > 1 && (
+            <ul className="mt-2 divide-y divide-hairline border-t border-hairline">
+              {session.exercises.map((ex, i) => {
+                if (i === exerciseIndex) return null;
+                const done = ex.sets.filter((s) => s.completed).length;
+                const total = ex.sets.length;
+                const cat = catalog.find((c) => c.id === ex.exerciseId);
+                return (
+                  <li key={ex.id}>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-3 py-3 text-left touch-manipulation"
+                      onClick={() => {
+                        setExerciseIndex(i);
+                        setTimedLeft(null);
+                        setTimedRunning(false);
+                        setMenuOpen(false);
+                      }}
+                    >
+                      <ExerciseThumb
+                        size="sm"
+                        exerciseId={ex.exerciseId}
+                        exerciseName={ex.exerciseName}
+                        imagePath={cat?.images[0]}
+                        primaryMuscles={ex.primaryMuscles}
+                        className="!h-12 !w-12"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-medium">{ex.exerciseName}</div>
+                        <div className="text-sm text-muted">
+                          {done}/{total} Fatto
+                        </div>
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
 
-          <div className="mt-auto flex items-center justify-between gap-3 border-t border-hairline pt-4">
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={exerciseIndex === 0}
-              onClick={() => {
-                setExerciseIndex((i) => i - 1);
-                setTimedLeft(null);
-                setTimedRunning(false);
-              }}
-            >
-              ← Prec
-            </Button>
-            {exerciseIndex < session.exercises.length - 1 ? (
-              <Button
-                type="button"
-                onClick={() => {
-                  setExerciseIndex((i) => i + 1);
-                  setTimedLeft(null);
-                  setTimedRunning(false);
-                }}
-              >
-                Succ →
-              </Button>
-            ) : (
-              <Button type="button" variant="accent" onClick={finishSession}>
-                Termina sessione
-              </Button>
-            )}
-          </div>
+          <label className="mt-2 flex min-h-11 items-center gap-2 text-sm text-muted">
+            <input
+              type="checkbox"
+              checked={wakeLockOn}
+              onChange={(e) => setWakeLockOn(e.target.checked)}
+              className="h-5 w-5 accent-accent"
+            />
+            Schermo sempre acceso
+          </label>
         </div>
       ) : null}
-
-      <div className="mt-6">
-        <Label htmlFor="sess-notes">Note sessione</Label>
-        <Textarea
-          id="sess-notes"
-          rows={2}
-          value={session.notes ?? ""}
-          onChange={(e) => updateSession({ ...session, notes: e.target.value })}
-        />
-      </div>
 
       {pickerMode && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 sm:items-center">
@@ -606,122 +740,99 @@ function TimedBlock({
 function SetsBlock({
   exercise,
   unit,
+  previousSets,
   onCompleteSet,
   onAddSet,
   onUpdateSet,
 }: {
   exercise: SessionExercise;
   unit: "kg" | "lb";
+  previousSets: LoggedSet[];
   onCompleteSet: (setIndex: number, data: Partial<LoggedSet>) => void;
   onAddSet: () => void;
   onUpdateSet: (setIndex: number, patch: Partial<LoggedSet>) => void;
 }) {
-  const activeIndex = exercise.sets.findIndex((s) => !s.completed);
-  const focusIndex = activeIndex === -1 ? exercise.sets.length - 1 : activeIndex;
-
   return (
-    <div className="space-y-4">
-      <ul className="space-y-3">
+    <div className="space-y-3">
+      <div className="grid grid-cols-[2rem_1fr_4.5rem_4rem_2.5rem] items-center gap-1.5 px-0.5 text-[10px] uppercase tracking-wide text-muted">
+        <span>Set</span>
+        <span>Precedente</span>
+        <span className="text-center">Kg</span>
+        <span className="text-center">Rip.</span>
+        <span />
+      </div>
+      <ul className="space-y-2">
         {exercise.sets.map((set, index) => {
-          const isActive = index === focusIndex && !set.completed;
           const displayW = displayWeight(set.weight, unit);
+          const prev = previousSets[index];
           return (
             <li
               key={set.id}
-              className={`border-b border-hairline pb-3 ${
-                isActive ? "border-accent" : ""
-              }`}
+              className="grid grid-cols-[2rem_1fr_4.5rem_4rem_2.5rem] items-center gap-1.5"
             >
-              <div className="mb-2 flex items-baseline justify-between">
-                <span className="text-xs uppercase tracking-wide text-muted">
-                  Serie {index + 1}
-                  {set.completed ? " · fatta" : isActive ? " · in corso" : ""}
-                </span>
-                {set.completed && (
-                  <Mono className="text-sm text-muted">
-                    {set.reps} × {formatWeight(displayW, unit)} {unit}
-                    {set.rpe !== undefined ? ` · RPE ${set.rpe}` : ""}
-                  </Mono>
-                )}
-              </div>
-              {!set.completed && (
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <Label>Peso ({unit})</Label>
-                    <Input
-                      type="number"
-                      inputMode="decimal"
-                      step="any"
-                      className={`font-mono text-3xl ${isActive ? "text-accent" : ""}`}
-                      value={displayW ?? ""}
-                      onChange={(e) => {
-                        const v =
-                          e.target.value === ""
-                            ? undefined
-                            : Number(e.target.value);
-                        onUpdateSet(index, {
-                          weight: storeWeight(v, unit),
-                        });
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <Label>Reps</Label>
-                    <Input
-                      type="number"
-                      inputMode="numeric"
-                      className={`font-mono text-3xl ${isActive ? "text-accent" : ""}`}
-                      value={set.reps}
-                      onChange={(e) =>
-                        onUpdateSet(index, { reps: Number(e.target.value) || 0 })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label>RPE</Label>
-                    <Input
-                      type="number"
-                      inputMode="decimal"
-                      step="0.5"
-                      min={1}
-                      max={10}
-                      className="font-mono text-2xl"
-                      value={set.rpe ?? ""}
-                      onChange={(e) =>
-                        onUpdateSet(index, {
-                          rpe:
-                            e.target.value === ""
-                              ? undefined
-                              : Number(e.target.value),
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-              )}
-              {!set.completed && isActive && (
-                <Button
-                  type="button"
-                  variant="accent"
-                  className="mt-3 w-full"
-                  onClick={() =>
-                    onCompleteSet(index, {
-                      reps: set.reps,
-                      weight: set.weight,
-                      rpe: set.rpe,
-                    })
-                  }
-                >
-                  Conferma serie
-                </Button>
-              )}
+              <Mono
+                className={`text-center text-sm ${
+                  set.completed ? "text-accent" : "text-muted"
+                }`}
+              >
+                {index + 1}
+              </Mono>
+              <span className="truncate text-sm text-muted">
+                {formatPrevSet(prev, unit)}
+              </span>
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="any"
+                disabled={set.completed}
+                className="h-10 px-1 text-center font-mono text-base"
+                value={displayW ?? ""}
+                onChange={(e) => {
+                  const v =
+                    e.target.value === "" ? undefined : Number(e.target.value);
+                  onUpdateSet(index, { weight: storeWeight(v, unit) });
+                }}
+              />
+              <Input
+                type="number"
+                inputMode="numeric"
+                disabled={set.completed}
+                className="h-10 px-1 text-center font-mono text-base"
+                value={set.reps}
+                onChange={(e) =>
+                  onUpdateSet(index, { reps: Number(e.target.value) || 0 })
+                }
+              />
+              <button
+                type="button"
+                disabled={set.completed}
+                aria-label={set.completed ? "Serie completata" : "Completa serie"}
+                className={`flex h-10 w-10 items-center justify-center touch-manipulation ${
+                  set.completed
+                    ? "bg-accent text-chalk"
+                    : "border border-hairline text-muted"
+                }`}
+                onClick={() =>
+                  onCompleteSet(index, {
+                    reps: set.reps,
+                    weight: set.weight,
+                    rpe: set.rpe,
+                  })
+                }
+              >
+                ✓
+              </button>
             </li>
           );
         })}
       </ul>
-      <Button type="button" variant="ghost" onClick={onAddSet}>
+      <button
+        type="button"
+        className="flex min-h-11 w-full items-center justify-center bg-ink/[0.04] text-sm font-medium touch-manipulation"
+        onClick={onAddSet}
+      >
         + Aggiungi serie
-      </Button>
+      </button>
     </div>
   );
 }

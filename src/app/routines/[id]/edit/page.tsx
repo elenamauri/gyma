@@ -12,6 +12,7 @@ export default function EditRoutinePage() {
   const id = params.id as string;
   const { routines, ready } = useAppStore();
   const routine = routines.find((r) => r.id === id);
+  const returnPath = `/routines/${id}/edit`;
 
   if (!ready) {
     return <p className="text-sm text-muted">Caricamento…</p>;
@@ -39,7 +40,7 @@ export default function EditRoutinePage() {
         backHref={`/routines/${routine.id}`}
         backLabel="Dettaglio"
       />
-      <RoutineForm initial={routine} />
+      <RoutineForm initial={routine} returnPath={returnPath} />
     </div>
   );
 }

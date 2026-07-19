@@ -8,11 +8,11 @@ export default function NewRoutinePage() {
     <div className="space-y-5">
       <PageHeader
         title="Nuova routine"
-        description="Scegli tipo, esercizi, serie/reps o durate."
+        description="Configura nome, tipo ed esercizi."
         backHref="/routines"
         backLabel="Routine"
       />
-      <RoutineForm />
+      <RoutineForm returnPath="/routines/new" />
     </div>
   );
 }

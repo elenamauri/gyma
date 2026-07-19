@@ -3,6 +3,7 @@ import { ImageResponse } from "next/og";
 export const size = { width: 180, height: 180 };
 export const contentType = "image/png";
 
+/** iOS home-screen icon (apple-touch-icon). */
 export default function AppleIcon() {
   return new ImageResponse(
     (
@@ -11,22 +12,39 @@ export default function AppleIcon() {
           width: "100%",
           height: "100%",
           display: "flex",
-          flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
           background: "#FAFAF8",
-          border: "8px solid #161614",
         }}
       >
-        <div style={{ fontSize: 42, fontWeight: 700, color: "#161614" }}>GYMA</div>
         <div
           style={{
-            marginTop: 16,
-            width: 100,
-            height: 6,
-            background: "#E1442C",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
           }}
-        />
+        >
+          <div
+            style={{
+              fontSize: 44,
+              fontWeight: 700,
+              color: "#161614",
+              letterSpacing: -1.5,
+              lineHeight: 1,
+            }}
+          >
+            GYMA
+          </div>
+          <div
+            style={{
+              marginTop: 12,
+              width: 56,
+              height: 5,
+              background: "#E1442C",
+            }}
+          />
+        </div>
       </div>
     ),
     { ...size },

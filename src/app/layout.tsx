@@ -3,6 +3,7 @@ import { Archivo, Inter, IBM_Plex_Mono } from "next/font/google";
 import { AuthProvider } from "@/lib/auth";
 import { AppStoreProvider } from "@/lib/store";
 import { AppShell } from "@/components/layout/AppShell";
+import { IntroSplash } from "@/components/layout/IntroSplash";
 import "./globals.css";
 
 const display = Archivo({
@@ -27,6 +28,10 @@ export const metadata: Metadata = {
   description:
     "Tracker di allenamento minimal: catalogo, routine, sessioni live e progressi.",
   applicationName: "GYMA",
+  icons: {
+    icon: [{ url: "/icon", type: "image/png", sizes: "512x512" }],
+    apple: [{ url: "/apple-icon", type: "image/png", sizes: "180x180" }],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -60,6 +65,7 @@ export default function RootLayout({
       >
         <AuthProvider>
           <AppStoreProvider>
+            <IntroSplash />
             <AppShell>{children}</AppShell>
           </AppStoreProvider>
         </AuthProvider>

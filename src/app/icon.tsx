@@ -3,6 +3,7 @@ import { ImageResponse } from "next/og";
 export const size = { width: 512, height: 512 };
 export const contentType = "image/png";
 
+/** App icon / PWA — safe padding for maskable home-screen crops. */
 export default function Icon() {
   return new ImageResponse(
     (
@@ -11,31 +12,41 @@ export default function Icon() {
           width: "100%",
           height: "100%",
           display: "flex",
-          flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
           background: "#FAFAF8",
-          border: "16px solid #161614",
         }}
       >
         <div
           style={{
-            fontSize: 120,
-            fontWeight: 700,
-            color: "#161614",
-            letterSpacing: -2,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 360,
+            height: 360,
           }}
         >
-          GYMA
+          <div
+            style={{
+              fontSize: 96,
+              fontWeight: 700,
+              color: "#161614",
+              letterSpacing: -4,
+              lineHeight: 1,
+            }}
+          >
+            GYMA
+          </div>
+          <div
+            style={{
+              marginTop: 28,
+              width: 120,
+              height: 10,
+              background: "#E1442C",
+            }}
+          />
         </div>
-        <div
-          style={{
-            marginTop: 40,
-            width: 280,
-            height: 12,
-            background: "#E1442C",
-          }}
-        />
       </div>
     ),
     { ...size },

@@ -7,10 +7,15 @@ export function Sparkline({
   label,
   points,
   unit,
+  formatValue,
+  showDelta = true,
 }: {
   label: string;
   points: Array<{ date: string; value: number }>;
-  unit: string;
+  unit?: string;
+  /** Custom formatter; defaults to weight-style when unit is set. */
+  formatValue?: (v: number) => string;
+  showDelta?: boolean;
 }) {
   const values = points.map((p) => p.value).filter((v) => v > 0);
   if (values.length < 1) return null;
@@ -18,11 +23,11 @@ export function Sparkline({
   const max = Math.max(...values);
   const range = max - min || 1;
   const w = 320;
-  const h = 80;
-  const pad = 4;
+  const h = 96;
+  const pad = 6;
 
-  const coords = points
-    .filter((p) => p.value > 0)
+  const filtered = points.filter((p) => p.value > 0);
+  const coords = filtered
     .map((p, i, arr) => {
       const x = pad + (i / Math.max(arr.length - 1, 1)) * (w - pad * 2);
       const y = h - pad - ((p.value - min) / range) * (h - pad * 2);
@@ -30,13 +35,46 @@ export function Sparkline({
     })
     .join(" ");
 
+  const dots = filtered.map((p, i, arr) => {
+    const x = pad + (i / Math.max(arr.length - 1, 1)) * (w - pad * 2);
+    const y = h - pad - ((p.value - min) / range) * (h - pad * 2);
+    return { x, y, value: p.value, date: p.date };
+  });
+
+  const first = values[0];
+  const last = values[values.length - 1];
+  const delta = last - first;
+  const deltaPct = first > 0 ? (delta / first) * 100 : 0;
+
+  const fmt =
+    formatValue ??
+    ((v: number) =>
+      unit ? `${formatWeight(v, unit as "kg")} ${unit}` : String(Math.round(v)));
+
   return (
     <div>
-      <div className="mb-1 flex items-baseline justify-between">
-        <span className="text-xs uppercase tracking-wide text-muted">{label}</span>
-        <Mono className="text-sm">
-          {formatWeight(values[values.length - 1], unit as "kg")} {unit}
-        </Mono>
+      <div className="mb-1 flex items-baseline justify-between gap-2">
+        <span className="text-xs uppercase tracking-wide text-muted">
+          {label}
+        </span>
+        <div className="text-right">
+          <Mono className="text-sm">{fmt(last)}</Mono>
+          {showDelta && values.length > 1 && (
+            <div
+              className={`text-[11px] ${
+                delta > 0
+                  ? "text-accent"
+                  : delta < 0
+                    ? "text-muted"
+                    : "text-muted"
+              }`}
+            >
+              {delta > 0 ? "+" : ""}
+              {fmt(delta)}
+              {first > 0 ? ` (${deltaPct > 0 ? "+" : ""}${deltaPct.toFixed(0)}%)` : ""}
+            </div>
+          )}
+        </div>
       </div>
       <svg
         viewBox={`0 0 ${w} ${h}`}
@@ -50,6 +88,15 @@ export function Sparkline({
           strokeWidth="1.5"
           points={coords}
         />
+        {dots.map((d, i) => (
+          <circle
+            key={`${d.date}-${i}`}
+            cx={d.x}
+            cy={d.y}
+            r="2.5"
+            fill="#E1442C"
+          />
+        ))}
       </svg>
     </div>
   );

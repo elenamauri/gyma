@@ -2,41 +2,21 @@
 
 import { useMemo, useState } from "react";
 import { useAppStore } from "@/lib/store";
-import { exerciseProgressSeries } from "@/lib/pr";
 import { displayWeight, formatWeight } from "@/lib/units";
 import { uid } from "@/lib/storage";
 import {
   Button,
-  EmptyState,
   Input,
   Label,
   Mono,
-  Select,
 } from "@/components/ui/primitives";
 import { Sparkline } from "@/components/progress/Sparkline";
+import { ExerciseProgressPanel } from "@/components/progress/ExerciseProgressPanel";
 
 export function ProgressPage() {
   const { sessions, bodyweightLog, setBodyweightLog, settings } = useAppStore();
-  const [exerciseId, setExerciseId] = useState("");
   const [bw, setBw] = useState("");
   const [bwNote, setBwNote] = useState("");
-
-  const exerciseOptions = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const s of sessions) {
-      if (s.status !== "completed") continue;
-      for (const ex of s.exercises) {
-        map.set(ex.exerciseId, ex.exerciseName);
-      }
-    }
-    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
-  }, [sessions]);
-
-  const selectedId = exerciseId || exerciseOptions[0]?.[0] || "";
-  const series = useMemo(
-    () => (selectedId ? exerciseProgressSeries(sessions, selectedId) : []),
-    [sessions, selectedId],
-  );
 
   const bwSorted = useMemo(
     () =>
@@ -50,9 +30,7 @@ export function ProgressPage() {
     const displayed = Number(bw);
     if (!displayed || Number.isNaN(displayed)) return;
     const stored =
-      settings.unit === "kg"
-        ? displayed
-        : displayed / 2.2046226218;
+      settings.unit === "kg" ? displayed : displayed / 2.2046226218;
     const entry = {
       id: uid(),
       weight: stored,
@@ -66,86 +44,11 @@ export function ProgressPage() {
 
   return (
     <div className="space-y-10">
-      <section>
+      <section className="space-y-3">
         <h2 className="mb-3 font-display text-lg font-bold border-b border-hairline pb-2">
           Progressione esercizio
         </h2>
-        {exerciseOptions.length === 0 ? (
-          <EmptyState
-            title="Nessun dato ancora"
-            description="Completa alcune sessioni per vedere i grafici di progressione."
-          />
-        ) : (
-          <>
-            <Label htmlFor="ex-select">Esercizio</Label>
-            <Select
-              id="ex-select"
-              value={selectedId}
-              onChange={(e) => setExerciseId(e.target.value)}
-            >
-              {exerciseOptions.map(([id, name]) => (
-                <option key={id} value={id}>
-                  {name}
-                </option>
-              ))}
-            </Select>
-            {series.length === 0 ? (
-              <p className="mt-4 text-sm text-muted">Nessun punto dati.</p>
-            ) : (
-              <div className="mt-6 space-y-6">
-                <Sparkline
-                  label={`Peso max (${settings.unit})`}
-                  points={series.map((p) => ({
-                    date: p.date,
-                    value: displayWeight(p.maxWeight, settings.unit) ?? 0,
-                  }))}
-                  unit={settings.unit}
-                />
-                <Sparkline
-                  label={`Volume (${settings.unit})`}
-                  points={series.map((p) => ({
-                    date: p.date,
-                    value: displayWeight(p.volume, settings.unit) ?? 0,
-                  }))}
-                  unit={settings.unit}
-                />
-                <table className="mt-4 w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-hairline text-xs uppercase text-muted">
-                      <th className="py-2 font-normal">Data</th>
-                      <th className="py-2 font-normal">Max</th>
-                      <th className="py-2 font-normal">Vol</th>
-                    </tr>
-                  </thead>
-                  <tbody className="font-mono tabular-nums">
-                    {[...series].reverse().slice(0, 12).map((p) => (
-                      <tr key={p.date} className="border-b border-hairline">
-                        <td className="py-3">
-                          {new Date(p.date).toLocaleDateString("it-IT", {
-                            day: "2-digit",
-                            month: "2-digit",
-                          })}
-                        </td>
-                        <td className="py-3">
-                          {formatWeight(
-                            displayWeight(p.maxWeight, settings.unit),
-                            settings.unit,
-                          )}
-                        </td>
-                        <td className="py-3">
-                          {formatWeight(
-                            displayWeight(p.volume, settings.unit),
-                            settings.unit,
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </>
-        )}
+        <ExerciseProgressPanel sessions={sessions} unit={settings.unit} />
       </section>
 
       <section>

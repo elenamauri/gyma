@@ -95,6 +95,8 @@ export interface ProgressPoint {
   date: string;
   maxWeight: number;
   volume: number;
+  sets: number;
+  reps: number;
 }
 
 export function exerciseProgressSeries(
@@ -114,13 +116,54 @@ export function exerciseProgressSeries(
     if (!ex) continue;
     const maxWeight = exerciseMaxWeight(ex);
     const volume = exerciseVolume(ex);
-    if (maxWeight === 0 && volume === 0) continue;
+    const done = ex.sets.filter((s) => s.completed);
+    const sets = done.length;
+    const reps = done.reduce((sum, s) => sum + s.reps, 0);
+    if (maxWeight === 0 && volume === 0 && sets === 0) continue;
     points.push({
       date: session.completedAt!,
       maxWeight,
       volume,
+      sets,
+      reps,
     });
   }
 
   return points;
+}
+
+/** All PRs across completed sessions, newest first. */
+export function collectAllPRs(sessions: Session[]): PersonalRecord[] {
+  const list: PersonalRecord[] = [];
+  for (const s of sessions) {
+    if (s.status !== "completed" || !s.prs?.length) continue;
+    list.push(...s.prs);
+  }
+  return list.sort(
+    (a, b) =>
+      new Date(b.achievedAt).getTime() - new Date(a.achievedAt).getTime(),
+  );
+}
+
+/** Best lifetime max weight / volume per exercise from history. */
+export function exerciseRecords(
+  sessions: Session[],
+  exerciseId: string,
+): { maxWeight: number; maxVolume: number; maxSets: number } {
+  let maxWeight = 0;
+  let maxVolume = 0;
+  let maxSets = 0;
+  for (const s of sessions) {
+    if (s.status !== "completed") continue;
+    for (const ex of s.exercises) {
+      if (ex.exerciseId !== exerciseId) continue;
+      maxWeight = Math.max(maxWeight, exerciseMaxWeight(ex));
+      maxVolume = Math.max(maxVolume, exerciseVolume(ex));
+      maxSets = Math.max(
+        maxSets,
+        ex.sets.filter((set) => set.completed).length,
+      );
+    }
+  }
+  return { maxWeight, maxVolume, maxSets };
 }

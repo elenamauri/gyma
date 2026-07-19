@@ -11,6 +11,7 @@ import {
   Select,
   Textarea,
 } from "@/components/ui/primitives";
+import { AccountPanel } from "@/components/settings/AccountPanel";
 
 export function SettingsPage() {
   const {
@@ -77,9 +78,11 @@ export function SettingsPage() {
           Impostazioni
         </h1>
         <p className="mt-1 text-sm text-muted">
-          Unità, notifiche e backup dei dati locali.
+          Account cloud, unità, notifiche e backup.
         </p>
       </div>
+
+      <AccountPanel />
 
       <section className="space-y-4">
         <h2 className="font-display text-lg font-bold border-b border-hairline pb-2">
@@ -138,8 +141,8 @@ export function SettingsPage() {
           Backup dati
         </h2>
         <p className="text-sm text-muted">
-          Tutti i dati sono nel localStorage di questo browser. Esporta un JSON
-          per non perderli cambiando dispositivo.
+          Con account cloud i dati si sincronizzano automaticamente. L’export
+          JSON resta utile come backup extra.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button type="button" onClick={downloadExport}>

@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -29,6 +30,14 @@ import {
   trackRecentExercise,
   toggleFavorite as toggleFavoriteStorage,
 } from "@/lib/storage";
+import { useAuth } from "@/lib/auth";
+import {
+  fetchCloudData,
+  pushCloudData,
+  shouldPreferCloud,
+} from "@/lib/supabase/sync";
+
+type SyncStatus = "idle" | "syncing" | "synced" | "error" | "offline";
 
 interface AppStoreValue {
   ready: boolean;
@@ -38,6 +47,9 @@ interface AppStoreValue {
   favorites: string[];
   recentExerciseIds: string[];
   settings: Settings;
+  syncStatus: SyncStatus;
+  syncError: string | null;
+  lastSyncedAt: string | null;
   setRoutines: (routines: Routine[]) => void;
   upsertRoutine: (routine: Routine) => void;
   deleteRoutine: (id: string) => void;
@@ -51,11 +63,13 @@ interface AppStoreValue {
   exportData: () => AppData;
   importData: (data: Partial<AppData>) => void;
   refresh: () => void;
+  syncNow: () => Promise<void>;
 }
 
 const AppStoreContext = createContext<AppStoreValue | null>(null);
 
 export function AppStoreProvider({ children }: { children: ReactNode }) {
+  const { user, ready: authReady, configured } = useAuth();
   const [ready, setReady] = useState(false);
   const [routines, setRoutinesState] = useState<Routine[]>([]);
   const [sessions, setSessionsState] = useState<Session[]>([]);
@@ -63,9 +77,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [favorites, setFavoritesState] = useState<string[]>([]);
   const [recentExerciseIds, setRecentState] = useState<string[]>([]);
   const [settings, setSettingsState] = useState<Settings>(DEFAULT_SETTINGS);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hydratedUser = useRef<string | null>(null);
 
-  const refresh = useCallback(() => {
-    const data = getAllData();
+  const applyData = useCallback((data: AppData) => {
     setRoutinesState(data.routines);
     setSessionsState(data.sessions);
     setBodyweightState(data.bodyweightLog);
@@ -74,15 +92,117 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setSettingsState(data.settings);
   }, []);
 
+  const refresh = useCallback(() => {
+    applyData(getAllData());
+  }, [applyData]);
+
+  const scheduleCloudPush = useCallback(() => {
+    if (!configured || !user) return;
+    if (syncTimer.current) clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(async () => {
+      try {
+        setSyncStatus("syncing");
+        setSyncError(null);
+        const updatedAt = await pushCloudData(getAllData());
+        setLastSyncedAt(updatedAt);
+        setSyncStatus("synced");
+      } catch (err) {
+        setSyncStatus("error");
+        setSyncError(err instanceof Error ? err.message : "Sync fallita");
+      }
+    }, 800);
+  }, [configured, user]);
+
+  const persistAndSync = useCallback(
+    (mutateLocal: () => void) => {
+      mutateLocal();
+      scheduleCloudPush();
+    },
+    [scheduleCloudPush],
+  );
+
+  const syncNow = useCallback(async () => {
+    if (!configured || !user) {
+      setSyncStatus("offline");
+      return;
+    }
+    try {
+      setSyncStatus("syncing");
+      setSyncError(null);
+      const updatedAt = await pushCloudData(getAllData());
+      setLastSyncedAt(updatedAt);
+      setSyncStatus("synced");
+    } catch (err) {
+      setSyncStatus("error");
+      setSyncError(err instanceof Error ? err.message : "Sync fallita");
+    }
+  }, [configured, user]);
+
+  // Initial local load
   useEffect(() => {
+    if (!authReady) return;
     refresh();
     setReady(true);
-  }, [refresh]);
+  }, [authReady, refresh]);
 
-  const setRoutines = useCallback((next: Routine[]) => {
-    setRoutinesState(next);
-    saveRoutines(next);
+  // Pull from cloud when user logs in
+  useEffect(() => {
+    if (!authReady || !ready) return;
+
+    if (!configured || !user) {
+      hydratedUser.current = null;
+      setSyncStatus(configured ? "offline" : "idle");
+      return;
+    }
+
+    if (hydratedUser.current === user.id) return;
+    hydratedUser.current = user.id;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        setSyncStatus("syncing");
+        setSyncError(null);
+        const local = getAllData();
+        const cloud = await fetchCloudData();
+        if (cancelled) return;
+
+        if (shouldPreferCloud(local, cloud) && cloud) {
+          importAllData(cloud.payload);
+          applyData(cloud.payload);
+          setLastSyncedAt(cloud.updatedAt);
+          setSyncStatus("synced");
+        } else {
+          const updatedAt = await pushCloudData(local);
+          if (cancelled) return;
+          setLastSyncedAt(updatedAt);
+          setSyncStatus("synced");
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setSyncStatus("error");
+        setSyncError(err instanceof Error ? err.message : "Sync fallita");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, ready, configured, user, applyData]);
+
+  useEffect(() => {
+    return () => {
+      if (syncTimer.current) clearTimeout(syncTimer.current);
+    };
   }, []);
+
+  const setRoutines = useCallback(
+    (next: Routine[]) => {
+      setRoutinesState(next);
+      persistAndSync(() => saveRoutines(next));
+    },
+    [persistAndSync],
+  );
 
   const upsertRoutine = useCallback(
     (routine: Routine) => {
@@ -92,75 +212,101 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           idx >= 0
             ? prev.map((r) => (r.id === routine.id ? routine : r))
             : [routine, ...prev];
-        saveRoutines(next);
+        persistAndSync(() => saveRoutines(next));
         return next;
       });
     },
-    [],
+    [persistAndSync],
   );
 
-  const deleteRoutine = useCallback((id: string) => {
-    setRoutinesState((prev) => {
-      const next = prev.filter((r) => r.id !== id);
-      saveRoutines(next);
-      return next;
-    });
-  }, []);
+  const deleteRoutine = useCallback(
+    (id: string) => {
+      setRoutinesState((prev) => {
+        const next = prev.filter((r) => r.id !== id);
+        persistAndSync(() => saveRoutines(next));
+        return next;
+      });
+    },
+    [persistAndSync],
+  );
 
-  const setSessions = useCallback((next: Session[]) => {
-    setSessionsState(next);
-    saveSessions(next);
-  }, []);
+  const setSessions = useCallback(
+    (next: Session[]) => {
+      setSessionsState(next);
+      persistAndSync(() => saveSessions(next));
+    },
+    [persistAndSync],
+  );
 
-  const upsertSession = useCallback((session: Session) => {
-    setSessionsState((prev) => {
-      const idx = prev.findIndex((s) => s.id === session.id);
-      const next =
-        idx >= 0
-          ? prev.map((s) => (s.id === session.id ? session : s))
-          : [session, ...prev];
-      saveSessions(next);
-      return next;
-    });
-  }, []);
+  const upsertSession = useCallback(
+    (session: Session) => {
+      setSessionsState((prev) => {
+        const idx = prev.findIndex((s) => s.id === session.id);
+        const next =
+          idx >= 0
+            ? prev.map((s) => (s.id === session.id ? session : s))
+            : [session, ...prev];
+        persistAndSync(() => saveSessions(next));
+        return next;
+      });
+    },
+    [persistAndSync],
+  );
 
-  const deleteSession = useCallback((id: string) => {
-    setSessionsState((prev) => {
-      const next = prev.filter((s) => s.id !== id);
-      saveSessions(next);
-      return next;
-    });
-  }, []);
+  const deleteSession = useCallback(
+    (id: string) => {
+      setSessionsState((prev) => {
+        const next = prev.filter((s) => s.id !== id);
+        persistAndSync(() => saveSessions(next));
+        return next;
+      });
+    },
+    [persistAndSync],
+  );
 
-  const setBodyweightLog = useCallback((log: BodyweightEntry[]) => {
-    setBodyweightState(log);
-    saveBodyweightLog(log);
-  }, []);
+  const setBodyweightLog = useCallback(
+    (log: BodyweightEntry[]) => {
+      setBodyweightState(log);
+      persistAndSync(() => saveBodyweightLog(log));
+    },
+    [persistAndSync],
+  );
 
-  const toggleFavorite = useCallback((exerciseId: string) => {
-    const next = toggleFavoriteStorage(exerciseId);
-    setFavoritesState(next);
-  }, []);
+  const toggleFavorite = useCallback(
+    (exerciseId: string) => {
+      const next = toggleFavoriteStorage(exerciseId);
+      setFavoritesState(next);
+      scheduleCloudPush();
+    },
+    [scheduleCloudPush],
+  );
 
-  const markRecent = useCallback((exerciseId: string) => {
-    trackRecentExercise(exerciseId);
-    setRecentState((prev) => {
-      const next = [exerciseId, ...prev.filter((id) => id !== exerciseId)].slice(
-        0,
-        20,
-      );
-      saveRecentExerciseIds(next);
-      return next;
-    });
-  }, []);
+  const markRecent = useCallback(
+    (exerciseId: string) => {
+      trackRecentExercise(exerciseId);
+      setRecentState((prev) => {
+        const next = [
+          exerciseId,
+          ...prev.filter((id) => id !== exerciseId),
+        ].slice(0, 20);
+        saveRecentExerciseIds(next);
+        scheduleCloudPush();
+        return next;
+      });
+    },
+    [scheduleCloudPush],
+  );
 
-  const updateSettings = useCallback((patch: Partial<Settings>) => {
-    setSettingsState((prev) => {
-      const next = { ...prev, ...patch };
-      saveSettings(next);
-      return next;
-    });
-  }, []);
+  const updateSettings = useCallback(
+    (patch: Partial<Settings>) => {
+      setSettingsState((prev) => {
+        const next = { ...prev, ...patch };
+        persistAndSync(() => saveSettings(next));
+        return next;
+      });
+    },
+    [persistAndSync],
+  );
 
   const exportData = useCallback(() => exportAllData(), []);
 
@@ -168,8 +314,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     (data: Partial<AppData>) => {
       importAllData(data);
       refresh();
+      scheduleCloudPush();
     },
-    [refresh],
+    [refresh, scheduleCloudPush],
   );
 
   const value = useMemo<AppStoreValue>(
@@ -181,6 +328,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       favorites,
       recentExerciseIds,
       settings,
+      syncStatus,
+      syncError,
+      lastSyncedAt,
       setRoutines,
       upsertRoutine,
       deleteRoutine,
@@ -194,6 +344,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       exportData,
       importData,
       refresh,
+      syncNow,
     }),
     [
       ready,
@@ -203,6 +354,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       favorites,
       recentExerciseIds,
       settings,
+      syncStatus,
+      syncError,
+      lastSyncedAt,
       setRoutines,
       upsertRoutine,
       deleteRoutine,
@@ -216,6 +370,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       exportData,
       importData,
       refresh,
+      syncNow,
     ],
   );
 

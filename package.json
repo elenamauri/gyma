@@ -10,6 +10,7 @@
     "index-exercises": "node scripts/index-exercises.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.110.7",
     "fuse.js": "^7.5.0",
     "next": "14.2.35",
     "react": "^18",

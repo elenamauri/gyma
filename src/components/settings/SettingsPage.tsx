@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useAppStore } from "@/lib/store";
+import { useAuth } from "@/lib/auth";
 import { buildAiSummary } from "@/lib/ai";
 import type { AppData } from "@/lib/types";
 import {
@@ -14,6 +15,7 @@ import {
 import { AccountPanel } from "@/components/settings/AccountPanel";
 
 export function SettingsPage() {
+  const { ready, configured, user } = useAuth();
   const {
     settings,
     updateSettings,
@@ -71,6 +73,25 @@ export function SettingsPage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  if (!ready) {
+    return <p className="text-sm text-muted">Caricamento…</p>;
+  }
+
+  // Non loggato: solo login / registrazione
+  if (!user) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="font-display text-3xl font-bold tracking-tight">Utente</h1>
+          <p className="mt-1 text-sm text-muted">
+            Accedi per sincronizzare i tuoi allenamenti.
+          </p>
+        </div>
+        <AccountPanel loginOnly />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-10">
       <div>
@@ -112,23 +133,23 @@ export function SettingsPage() {
             className="font-mono"
           />
         </div>
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex min-h-11 items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={settings.soundEnabled}
             onChange={(e) => updateSettings({ soundEnabled: e.target.checked })}
-            className="accent-accent"
+            className="h-5 w-5 accent-accent"
           />
           Suono a fine recupero
         </label>
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex min-h-11 items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={settings.vibrationEnabled}
             onChange={(e) =>
               updateSettings({ vibrationEnabled: e.target.checked })
             }
-            className="accent-accent"
+            className="h-5 w-5 accent-accent"
           />
           Vibrazione a fine recupero
         </label>
@@ -139,8 +160,7 @@ export function SettingsPage() {
           Backup dati
         </h2>
         <p className="text-sm text-muted">
-          Con account cloud i dati si sincronizzano automaticamente. L’export
-          JSON resta utile come backup extra.
+          I dati si sincronizzano sul cloud. L’export JSON è un backup extra.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button type="button" onClick={downloadExport}>
@@ -172,8 +192,7 @@ export function SettingsPage() {
           Export riepilogo per AI
         </h2>
         <p className="text-sm text-muted">
-          Genera un testo delle ultime 4 settimane da incollare in Claude.ai per
-          chiedere consigli (nessuna API, gratis).
+          Genera un testo delle ultime 4 settimane da incollare in Claude.ai.
         </p>
         <Button type="button" variant="ghost" onClick={generateSummary}>
           Genera riepilogo
@@ -192,6 +211,12 @@ export function SettingsPage() {
           </>
         )}
       </section>
+
+      {!configured && (
+        <p className="text-xs text-muted">
+          Cloud non configurato: i dati restano solo su questo dispositivo.
+        </p>
+      )}
     </div>
   );
 }

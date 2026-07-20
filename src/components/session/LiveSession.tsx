@@ -508,6 +508,7 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
                       imagePath={cat?.images[0]}
                       primaryMuscles={ex.primaryMuscles}
                       secondaryMuscles={cat?.secondaryMuscles}
+                      returnHref={`/session/live?id=${sessionId}`}
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">

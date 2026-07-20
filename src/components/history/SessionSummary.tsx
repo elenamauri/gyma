@@ -378,6 +378,7 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
                 volume={volume}
                 maxWeight={maxWeight}
                 unit={unit}
+                returnHref={`/history/${sessionId}`}
               />
             ),
           )}
@@ -432,6 +433,7 @@ function ExerciseSummaryRow({
   volume,
   maxWeight,
   unit,
+  returnHref,
 }: {
   ex: SessionExercise;
   imagePath?: string;
@@ -441,6 +443,7 @@ function ExerciseSummaryRow({
   volume: number;
   maxWeight: number;
   unit: WeightUnit;
+  returnHref?: string;
 }) {
   return (
     <li className="py-4">
@@ -452,6 +455,7 @@ function ExerciseSummaryRow({
           imagePath={imagePath}
           primaryMuscles={primaryMuscles}
           secondaryMuscles={secondaryMuscles}
+          returnHref={returnHref}
         />
         <div className="min-w-0 flex-1">
           <div className="font-medium">{ex.exerciseName}</div>

@@ -173,6 +173,7 @@ export function RoutineExerciseList({
   onReplace,
   onReorder,
   weightUnit = "kg",
+  catalogReturnHref,
 }: {
   type: Routine["type"];
   exercises: Routine["exercises"];
@@ -185,6 +186,8 @@ export function RoutineExerciseList({
   onReplace?: (id: string) => void;
   onReorder?: (activeId: string, overId: string) => void;
   weightUnit?: "kg" | "lb";
+  /** Back target when opening exercise info from a row thumb. */
+  catalogReturnHref?: string;
 }) {
   const ids = exercises.map((e) => e.id);
   const sortable = !!onReorder;
@@ -224,6 +227,7 @@ export function RoutineExerciseList({
               onReplace={onReplace}
               weightUnit={weightUnit}
               dragHandle={dragHandle}
+              catalogReturnHref={catalogReturnHref}
             />
           );
           return sortable ? (
@@ -251,6 +255,7 @@ export function RoutineExerciseList({
               onRemove={onRemove}
               onReplace={onReplace}
               dragHandle={dragHandle}
+              catalogReturnHref={catalogReturnHref}
             />
           );
           return sortable ? (
@@ -319,6 +324,7 @@ function SortableRow({
   const dragHandle = (
     <button
       type="button"
+      data-no-swipe
       className="flex h-11 w-8 shrink-0 cursor-grab items-center justify-center text-muted touch-manipulation active:cursor-grabbing"
       aria-label="Trascina per riordinare"
       {...attributes}
@@ -369,61 +375,83 @@ function SwipeDelete({
   children: ReactNode;
 }) {
   const [offset, setOffset] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const offsetRef = useRef(0);
   const startX = useRef(0);
   const startY = useRef(0);
   const axis = useRef<"h" | "v" | null>(null);
-  const dragging = useRef(false);
+  const active = useRef(false);
+  const swiped = useRef(false);
 
   if (!enabled || !onDelete) {
     return <div className="py-3">{children}</div>;
   }
 
+  function setOffsetClamped(v: number) {
+    const next = Math.min(0, Math.max(-88, v));
+    offsetRef.current = next;
+    setOffset(next);
+  }
+
+  function resetSwipe() {
+    active.current = false;
+    setDragging(false);
+    axis.current = null;
+    setOffsetClamped(0);
+  }
+
   function onPointerDown(e: ReactPointerEvent) {
-    if ((e.target as HTMLElement).closest("a,button,input,select,textarea")) {
-      return;
-    }
+    if ((e.target as HTMLElement).closest("[data-no-swipe]")) return;
     startX.current = e.clientX;
     startY.current = e.clientY;
     axis.current = null;
-    dragging.current = true;
+    active.current = true;
+    swiped.current = false;
+    setDragging(true);
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }
 
   function onPointerMove(e: ReactPointerEvent) {
-    if (!dragging.current) return;
+    if (!active.current) return;
     const dx = e.clientX - startX.current;
     const dy = e.clientY - startY.current;
     if (!axis.current) {
       if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
       axis.current = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
+      if (axis.current === "v") {
+        active.current = false;
+        setDragging(false);
+        return;
+      }
     }
     if (axis.current !== "h") return;
     e.preventDefault();
-    setOffset(Math.min(0, Math.max(-96, dx)));
+    swiped.current = true;
+    setOffsetClamped(dx);
   }
 
   function onPointerUp() {
-    if (!dragging.current) return;
-    dragging.current = false;
-    if (offset < -72) {
+    if (!active.current) return;
+    active.current = false;
+    setDragging(false);
+    const current = offsetRef.current;
+    if (current < -64) {
       onDelete?.();
-      setOffset(0);
-    } else if (offset < -40) {
-      setOffset(-80);
+      setOffsetClamped(0);
     } else {
-      setOffset(0);
+      setOffsetClamped(0);
     }
     axis.current = null;
   }
 
   return (
     <div className="relative overflow-hidden">
-      <div className="absolute inset-y-0 right-0 flex w-20 items-stretch">
+      <div className="absolute inset-y-0 right-0 flex w-[5.5rem] items-stretch">
         <button
           type="button"
           className="flex w-full items-center justify-center bg-accent text-sm font-medium text-chalk touch-manipulation"
           onClick={() => {
-            setOffset(0);
+            resetSwipe();
             onDelete?.();
           }}
         >
@@ -431,14 +459,20 @@ function SwipeDelete({
         </button>
       </div>
       <div
-        className="relative bg-chalk py-3 transition-transform duration-150"
+        className={`relative touch-pan-y bg-chalk py-3 ${
+          dragging ? "" : "transition-transform duration-150"
+        }`}
         style={{ transform: `translateX(${offset}px)` }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onPointerCancel={() => {
-          dragging.current = false;
-          setOffset(0);
+        onPointerCancel={resetSwipe}
+        onClickCapture={(e) => {
+          if (swiped.current) {
+            e.preventDefault();
+            e.stopPropagation();
+            swiped.current = false;
+          }
         }}
       >
         {children}
@@ -519,7 +553,7 @@ function RowMenu({
       : null;
 
   return (
-    <div className="relative shrink-0">
+    <div className="relative shrink-0" data-no-swipe>
       <button
         ref={btnRef}
         type="button"
@@ -550,6 +584,7 @@ function RepsRow({
   onReplace,
   weightUnit,
   dragHandle,
+  catalogReturnHref,
 }: {
   ex: RoutineExerciseReps;
   cat?: ExerciseIndexEntry;
@@ -562,6 +597,7 @@ function RepsRow({
   onReplace?: (id: string) => void;
   weightUnit: "kg" | "lb";
   dragHandle: ReactNode | null;
+  catalogReturnHref?: string;
 }) {
   return (
     <SwipeDelete enabled={!!onRemove} onDelete={() => onRemove?.(ex.id)}>
@@ -574,6 +610,7 @@ function RepsRow({
           imagePath={cat?.images[0]}
           primaryMuscles={cat?.primaryMuscles ?? []}
           secondaryMuscles={cat?.secondaryMuscles ?? []}
+          returnHref={catalogReturnHref}
         />
         <button
           type="button"
@@ -651,6 +688,7 @@ function TimedRow({
   onRemove,
   onReplace,
   dragHandle,
+  catalogReturnHref,
 }: {
   ex: RoutineExerciseTimed;
   cat?: ExerciseIndexEntry;
@@ -662,6 +700,7 @@ function TimedRow({
   onRemove?: (id: string) => void;
   onReplace?: (id: string) => void;
   dragHandle: ReactNode | null;
+  catalogReturnHref?: string;
 }) {
   return (
     <SwipeDelete enabled={!!onRemove} onDelete={() => onRemove?.(ex.id)}>
@@ -674,6 +713,7 @@ function TimedRow({
           imagePath={cat?.images[0]}
           primaryMuscles={cat?.primaryMuscles ?? []}
           secondaryMuscles={cat?.secondaryMuscles ?? []}
+          returnHref={catalogReturnHref}
         />
         <button
           type="button"

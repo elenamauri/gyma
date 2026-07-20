@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Routine, RoutineType } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
 import { useExerciseCatalog } from "@/hooks/useExerciseCatalog";
@@ -38,6 +38,11 @@ export function RoutineForm({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const catalogReturnHref = useMemo(() => {
+    const q = searchParams.toString();
+    return q ? `${pathname}?${q}` : pathname;
+  }, [pathname, searchParams]);
   const { upsertRoutine, settings, programs } = useAppStore();
   const { exercises } = useExerciseCatalog();
   const [draft, setDraft] = useState<RoutineDraft | null>(null);
@@ -225,6 +230,7 @@ export function RoutineForm({
           catalog={exercises}
           editingId={editingId}
           weightUnit={settings.unit}
+          catalogReturnHref={catalogReturnHref}
           onSelect={(id) => setEditingId(id === editingId ? null : id)}
           onChangeReps={(id, patch) =>
             update({

@@ -42,6 +42,7 @@ export const ExerciseThumb = memo(function ExerciseThumb({
   className = "",
   eager = false,
   link,
+  returnHref,
 }: {
   exerciseId?: string;
   exerciseName?: string;
@@ -53,6 +54,8 @@ export const ExerciseThumb = memo(function ExerciseThumb({
   eager?: boolean;
   /** Open /catalog/[id] on tap. Defaults to true when exerciseId is set. */
   link?: boolean;
+  /** Where back should go from the exercise page (encoded as ?return=). */
+  returnHref?: string;
 }) {
   const { ref, visible } = useOnceInView<HTMLDivElement>();
   const show = eager || visible;
@@ -117,16 +120,24 @@ export const ExerciseThumb = memo(function ExerciseThumb({
 
   const sharedClass = `relative flex items-center justify-center overflow-hidden border border-hairline bg-ink/[0.03] ${box} ${className}`;
 
+  const catalogHref =
+    exerciseId && returnHref
+      ? `/catalog/${exerciseId}?return=${encodeURIComponent(returnHref)}`
+      : exerciseId
+        ? `/catalog/${exerciseId}`
+        : null;
+
   return (
     <div ref={ref} className={sharedClass}>
-      {asLink && exerciseId ? (
+      {asLink && catalogHref ? (
         <Link
-          href={`/catalog/${exerciseId}`}
+          href={catalogHref}
           className="absolute inset-0 z-10 touch-manipulation"
           aria-label={
             exerciseName ? `Info ${exerciseName}` : "Info esercizio"
           }
           onClick={(e) => e.stopPropagation()}
+          data-no-swipe
         />
       ) : null}
       {inner}

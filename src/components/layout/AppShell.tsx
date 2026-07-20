@@ -83,7 +83,10 @@ function resolveChrome(
   }
   if (pathname === "/catalog") return { title: "Catalogo", backHref: "/" };
   if (/^\/catalog\//.test(pathname)) {
-    return { title: "Esercizio", backHref: "/catalog" };
+    return {
+      title: "Esercizio",
+      backHref: returnTo && returnTo.startsWith("/") ? returnTo : "/catalog",
+    };
   }
   if (pathname === "/session/start") {
     return { title: "Inizia allenamento", backHref: "/" };

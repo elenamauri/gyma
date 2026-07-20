@@ -22,7 +22,9 @@ export function ActiveWorkoutBar() {
   const [finishOpen, setFinishOpen] = useState(false);
   const [, setTick] = useState(0);
 
-  const onLivePage = pathname.startsWith("/session/live");
+  const onLivePage =
+    pathname.startsWith("/session/live") ||
+    pathname.startsWith("/session/pick");
   const session = useMemo(() => findActiveSession(sessions), [sessions]);
   const paused = session ? isSessionPaused(session) : true;
   const elapsed = session ? getSessionElapsedSeconds(session) : 0;

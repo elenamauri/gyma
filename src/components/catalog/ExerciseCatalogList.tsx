@@ -9,6 +9,10 @@ import type Fuse from "fuse.js";
 import { Input, Select, Label, EmptyState, Mono } from "@/components/ui/primitives";
 import { ExerciseThumb } from "@/components/exercises/ExerciseThumb";
 
+function catalogDetailHref(id: string) {
+  return `/catalog/${id}?return=${encodeURIComponent("/catalog")}`;
+}
+
 const emptyFilters: CatalogFilters = {
   query: "",
   primaryMuscle: "",
@@ -164,7 +168,7 @@ export function ExerciseCatalogList({
             {filtered.map((ex) => (
               <li key={ex.id} className="flex min-h-14 items-center gap-2">
                 <Link
-                  href={`/catalog/${ex.id}`}
+                  href={catalogDetailHref(ex.id)}
                   className="min-w-0 flex-1 py-3 hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 >
                   <div className="truncate text-[15px] font-medium">{ex.name}</div>
@@ -213,7 +217,7 @@ function QuickSection({
         {items.slice(0, 8).map((ex) => (
           <li key={ex.id}>
             <Link
-              href={`/catalog/${ex.id}`}
+              href={catalogDetailHref(ex.id)}
               className="flex items-center gap-3 py-2 hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               <ExerciseThumb

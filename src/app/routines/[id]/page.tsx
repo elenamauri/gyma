@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { createSessionFromRoutine } from "@/components/session/LiveSession";
 import { useExerciseCatalog } from "@/hooks/useExerciseCatalog";
@@ -14,6 +14,7 @@ import {
 
 export default function RoutineDetailPage() {
   const params = useParams();
+  const pathname = usePathname();
   const router = useRouter();
   const id = params.id as string;
   const { ready, routines, upsertSession, deleteRoutine } = useAppStore();
@@ -72,6 +73,7 @@ export default function RoutineDetailPage() {
         type={routine.type}
         exercises={routine.exercises}
         catalog={exercises}
+        catalogReturnHref={pathname}
       />
 
       <button

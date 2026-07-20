@@ -14,8 +14,6 @@ import type {
 } from "@/lib/types";
 import { uid } from "@/lib/storage";
 import {
-  alternativesForMuscle,
-  filterExercises,
   loadExerciseIndex,
 } from "@/lib/exercises";
 import {
@@ -143,8 +141,6 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
 
   const [exerciseIndex, setExerciseIndex] = useState(0);
   const [catalog, setCatalog] = useState<ExerciseIndexEntry[]>([]);
-  const [pickerMode, setPickerMode] = useState<"replace" | "add" | null>(null);
-  const [pickerQuery, setPickerQuery] = useState("");
   const [timedLeft, setTimedLeft] = useState<number | null>(null);
   const [timedRunning, setTimedRunning] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
@@ -389,66 +385,13 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
     router.push("/");
   }
 
-  const pickerList = useMemo(() => {
-    if (!pickerMode || !catalog.length) return [];
-    if (pickerMode === "replace" && current) {
-      const alts = alternativesForMuscle(
-        catalog,
-        current.primaryMuscles,
-        current.exerciseId,
-      );
-      return filterExercises(
-        alts.length ? alts : catalog,
-        {
-          query: pickerQuery,
-          primaryMuscle: "",
-          equipment: "",
-          level: "",
-          category: "",
-        },
-      ).slice(0, 50);
-    }
-    return filterExercises(catalog, {
-      query: pickerQuery,
-      primaryMuscle: "",
-      equipment: "",
-      level: "",
-      category: "",
-    }).slice(0, 50);
-  }, [pickerMode, catalog, current, pickerQuery]);
-
-  function applyPick(ex: ExerciseIndexEntry) {
+  function openCatalog(mode: "add" | "replace", index = exerciseIndex) {
     if (!session) return;
-    if (pickerMode === "replace" && current) {
-      patchCurrent({
-        exerciseId: ex.id,
-        exerciseName: ex.name,
-        primaryMuscles: ex.primaryMuscles,
-        replacedFromId: current.exerciseId,
-      });
-    } else if (pickerMode === "add") {
-      const newEx: SessionExercise = {
-        id: uid(),
-        exerciseId: ex.id,
-        exerciseName: ex.name,
-        primaryMuscles: ex.primaryMuscles,
-        targetSets: 3,
-        targetReps: 10,
-        restSeconds: settings.defaultRestSeconds,
-        sets: Array.from({ length: 3 }, () => ({
-          id: uid(),
-          reps: 10,
-          completed: false,
-        })),
-      };
-      updateSession({
-        ...session,
-        exercises: [...session.exercises, newEx],
-      });
-      setExerciseIndex(session.exercises.length);
-    }
-    setPickerMode(null);
-    setPickerQuery("");
+    updateSession(snapshotLiveSession(session, index));
+    setMenuOpenId(null);
+    router.push(
+      `/session/pick?id=${encodeURIComponent(session.id)}&mode=${mode}&index=${index}`,
+    );
   }
 
   function removeExerciseAt(index: number) {
@@ -547,7 +490,7 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
           <p className="text-center text-muted">
             Sessione vuota. Aggiungi un esercizio per iniziare.
           </p>
-          <Button type="button" onClick={() => setPickerMode("add")}>
+          <Button type="button" onClick={() => openCatalog("add")}>
             Aggiungi esercizio
           </Button>
         </div>
@@ -629,13 +572,7 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
                           <button
                             type="button"
                             className="min-h-10 border border-hairline px-2 text-muted touch-manipulation"
-                            onClick={() => {
-                              setExerciseIndex(i);
-                              setTimedLeft(null);
-                              setTimedRunning(false);
-                              setMenuOpenId(null);
-                              setPickerMode("replace");
-                            }}
+                            onClick={() => openCatalog("replace", i)}
                           >
                             Sostituisci
                           </button>
@@ -710,56 +647,10 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
             type="button"
             variant="ghost"
             className="mt-4 w-full"
-            onClick={() => setPickerMode("add")}
+            onClick={() => openCatalog("add")}
           >
             + Aggiungi esercizio
           </Button>
-        </div>
-      )}
-
-      {pickerMode && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 sm:items-center">
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="max-h-[85dvh] w-full max-w-lg overflow-auto bg-chalk p-4"
-          >
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="font-display text-lg font-bold">
-                {pickerMode === "replace" ? "Sostituisci esercizio" : "Aggiungi esercizio"}
-              </h3>
-              <Button type="button" variant="ghost" onClick={() => setPickerMode(null)}>
-                Chiudi
-              </Button>
-            </div>
-            {pickerMode === "replace" && current?.primaryMuscles?.length ? (
-              <p className="mb-2 text-xs text-muted">
-                Alternative per {current.primaryMuscles.join(", ")}
-              </p>
-            ) : null}
-            <Input
-              placeholder="Cerca…"
-              value={pickerQuery}
-              onChange={(e) => setPickerQuery(e.target.value)}
-              autoFocus
-            />
-            <ul className="mt-3 divide-y divide-hairline">
-              {pickerList.map((ex) => (
-                <li key={ex.id}>
-                  <button
-                    type="button"
-                    className="w-full py-2.5 text-left hover:text-accent"
-                    onClick={() => applyPick(ex)}
-                  >
-                    <div className="text-sm font-medium">{ex.name}</div>
-                    <div className="text-xs text-muted">
-                      {ex.primaryMuscles.join(", ")}
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
         </div>
       )}
     </div>

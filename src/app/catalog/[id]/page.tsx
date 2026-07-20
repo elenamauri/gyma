@@ -1,19 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import type { Exercise } from "@/lib/types";
 import { getExerciseById } from "@/lib/exercises";
 import { useAppStore } from "@/lib/store";
+import { safeReturnPath } from "@/components/exercises/ExerciseThumb";
 import { Button } from "@/components/ui/primitives";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { MuscleMap } from "@/components/exercises/MuscleMap";
 import { ExerciseThumb } from "@/components/exercises/ExerciseThumb";
 
 export default function ExerciseDetailPage() {
+  return (
+    <Suspense fallback={<p className="text-sm text-muted">Caricamento…</p>}>
+      <ExerciseDetailInner />
+    </Suspense>
+  );
+}
+
+function ExerciseDetailInner() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const id = params.id as string;
+  const backHref = safeReturnPath(searchParams.get("return")) ?? "/catalog";
   const [exercise, setExercise] = useState<Exercise | null>(null);
   const [loading, setLoading] = useState(true);
   const { favorites, toggleFavorite, markRecent } = useAppStore();
@@ -39,8 +50,8 @@ export default function ExerciseDetailPage() {
     return (
       <div className="space-y-3">
         <p>Esercizio non trovato.</p>
-        <Link href="/catalog" className="text-accent underline">
-          Torna al catalogo
+        <Link href={backHref} className="text-accent underline">
+          Indietro
         </Link>
       </div>
     );

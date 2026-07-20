@@ -100,11 +100,17 @@ function resolveChrome(
   if (/^\/catalog\//.test(pathname)) {
     return {
       title: "Esercizio",
-      backHref: returnTo && returnTo.startsWith("/") ? returnTo : "/catalog",
+      backHref:
+        returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//")
+          ? returnTo
+          : "/catalog",
     };
   }
   if (pathname === "/session/start") {
     return { title: "Inizia allenamento", backHref: "/" };
+  }
+  if (pathname === "/session/pick") {
+    return { title: "Catalogo", backHref: "/session/start" };
   }
   if (pathname === "/history") return { title: "Storico", backHref: "/" };
   if (/^\/history\//.test(pathname)) {
@@ -239,11 +245,18 @@ function AppTopBar() {
       ? program.name
       : routine && routine.name
         ? routine.name
-        : chrome.title;
+        : pathname === "/session/pick"
+          ? params.get("mode") === "replace"
+            ? "Sostituisci"
+            : "Aggiungi esercizio"
+          : chrome.title;
+  const sessionPickId = params.get("id");
   const backHref =
-    routine && routineProgram
-      ? `/routines/programs/${routineProgram.id}`
-      : chrome.backHref;
+    pathname === "/session/pick" && sessionPickId
+      ? `/session/live?id=${encodeURIComponent(sessionPickId)}`
+      : routine && routineProgram
+        ? `/routines/programs/${routineProgram.id}`
+        : chrome.backHref;
 
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");

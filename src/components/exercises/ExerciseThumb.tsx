@@ -2,6 +2,7 @@
 
 import { memo, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { exerciseGifUrl, exerciseImageUrl } from "@/lib/exercises";
 import { MuscleMap } from "@/components/exercises/MuscleMap";
 
@@ -28,9 +29,19 @@ function useOnceInView<T extends HTMLElement>() {
   return { ref, visible };
 }
 
+/** Safe in-app return path for ?return= (no open redirects). */
+export function safeReturnPath(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (!path.startsWith("/") || path.startsWith("//")) return null;
+  // Avoid nesting catalog detail → catalog detail
+  if (/^\/catalog\/.+/.test(path)) return null;
+  return path;
+}
+
 /**
  * Prefer animated ExerciseDB GIF → static photo → muscle map.
  * Tap opens catalog exercise page when `link` is true (default if id present).
+ * Always carries ?return= so Indietro torna alla pagina di provenienza.
  */
 export const ExerciseThumb = memo(function ExerciseThumb({
   exerciseId,
@@ -54,14 +65,22 @@ export const ExerciseThumb = memo(function ExerciseThumb({
   eager?: boolean;
   /** Open /catalog/[id] on tap. Defaults to true when exerciseId is set. */
   link?: boolean;
-  /** Where back should go from the exercise page (encoded as ?return=). */
+  /** Where back should go. Defaults to current pathname (or /catalog from catalog). */
   returnHref?: string;
 }) {
+  const pathname = usePathname();
   const { ref, visible } = useOnceInView<HTMLDivElement>();
   const show = eager || visible;
   const [gif, setGif] = useState<string | null>(null);
   const [gifFailed, setGifFailed] = useState(false);
   const asLink = link ?? Boolean(exerciseId);
+
+  const autoReturn =
+    pathname === "/catalog" || pathname.startsWith("/catalog/")
+      ? "/catalog"
+      : pathname;
+  const resolvedReturn =
+    safeReturnPath(returnHref) ?? safeReturnPath(autoReturn);
 
   useEffect(() => {
     if (!show) return;
@@ -120,12 +139,11 @@ export const ExerciseThumb = memo(function ExerciseThumb({
 
   const sharedClass = `relative flex items-center justify-center overflow-hidden border border-hairline bg-ink/[0.03] ${box} ${className}`;
 
-  const catalogHref =
-    exerciseId && returnHref
-      ? `/catalog/${exerciseId}?return=${encodeURIComponent(returnHref)}`
-      : exerciseId
-        ? `/catalog/${exerciseId}`
-        : null;
+  const catalogHref = exerciseId
+    ? resolvedReturn
+      ? `/catalog/${exerciseId}?return=${encodeURIComponent(resolvedReturn)}`
+      : `/catalog/${exerciseId}`
+    : null;
 
   return (
     <div ref={ref} className={sharedClass}>

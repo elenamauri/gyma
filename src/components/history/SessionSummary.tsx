@@ -21,6 +21,7 @@ import { ExerciseThumb } from "@/components/exercises/ExerciseThumb";
 import { useExerciseCatalog } from "@/hooks/useExerciseCatalog";
 
 function sessionDurationSec(session: Session): number {
+  if (session.durationSeconds !== undefined) return session.durationSeconds;
   const start = new Date(session.startedAt).getTime();
   const end = new Date(session.completedAt ?? session.startedAt).getTime();
   return Math.max(0, Math.round((end - start) / 1000));
@@ -163,13 +164,17 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
   if (!summary) return null;
 
   function repeat() {
+    const now = new Date().toISOString();
     const copy: Session = {
       ...session!,
       id: uid(),
       status: "active",
       completedAt: undefined,
+      durationSeconds: undefined,
       prs: undefined,
-      startedAt: new Date().toISOString(),
+      startedAt: now,
+      resumedAt: now,
+      pausedElapsedSeconds: 0,
       exercises: session!.exercises.map((ex) => ({
         ...ex,
         id: uid(),

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import type { Routine } from "@/lib/types";
+import { setActiveSessionId } from "@/lib/session-active";
 import {
   createEmptySession,
   createSessionFromRoutine,
@@ -51,12 +52,14 @@ export function StartWorkoutPage() {
   function startRoutine(routine: Routine) {
     const session = createSessionFromRoutine(routine);
     upsertSession(session);
+    setActiveSessionId(session.id);
     router.push(`/session/live?id=${session.id}`);
   }
 
   function startEmpty() {
     const session = createEmptySession();
     upsertSession(session);
+    setActiveSessionId(session.id);
     router.push(`/session/live?id=${session.id}`);
   }
 

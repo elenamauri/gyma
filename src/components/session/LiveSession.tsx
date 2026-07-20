@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type {
@@ -13,12 +13,19 @@ import type {
   SessionExercise,
 } from "@/lib/types";
 import { uid } from "@/lib/storage";
-import { detectPRs } from "@/lib/pr";
 import {
   alternativesForMuscle,
   filterExercises,
   loadExerciseIndex,
 } from "@/lib/exercises";
+import {
+  completeSession,
+  formatSessionElapsed,
+  getSessionElapsedSeconds,
+  pauseSession,
+  resumeSession,
+  setActiveSessionId,
+} from "@/lib/session-active";
 import { useAppStore } from "@/lib/store";
 import { useRestTimer } from "@/hooks/useRestTimer";
 import { useWakeLock } from "@/hooks/useWakeLock";
@@ -30,15 +37,8 @@ import {
 } from "@/lib/units";
 import { RestTimerBar } from "@/components/session/RestTimerBar";
 import { ExerciseThumb } from "@/components/exercises/ExerciseThumb";
+import { FinishWorkoutModal } from "@/components/session/FinishWorkoutModal";
 import { Button, Input, Mono } from "@/components/ui/primitives";
-
-function formatElapsed(totalSeconds: number): string {
-  const s = Math.max(0, Math.floor(totalSeconds));
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const rem = s % 60;
-  return `${h}:${m.toString().padStart(2, "0")}:${rem.toString().padStart(2, "0")}`;
-}
 
 function previousSetsForExercise(
   sessions: Session[],
@@ -64,8 +64,6 @@ function formatPrevSet(set: LoggedSet | undefined, unit: "kg" | "lb"): string {
   if (w !== undefined) return `${formatWeight(w, unit)}${unit} × ${set.reps}`;
   return `${set.reps} rip.`;
 }
-
-const ACTIVE_KEY = "gyma:activeSessionId";
 
 export function createSessionFromRoutine(routine: Routine): Session {
   const exercises: SessionExercise[] =
@@ -112,17 +110,22 @@ export function createSessionFromRoutine(routine: Routine): Session {
     status: "active",
     exercises,
     startedAt: new Date().toISOString(),
+    resumedAt: new Date().toISOString(),
+    pausedElapsedSeconds: 0,
   };
 }
 
 export function createEmptySession(): Session {
+  const now = new Date().toISOString();
   return {
     id: uid(),
     routineName: "Sessione libera",
     type: "reps",
     status: "active",
     exercises: [],
-    startedAt: new Date().toISOString(),
+    startedAt: now,
+    resumedAt: now,
+    pausedElapsedSeconds: 0,
   };
 }
 
@@ -144,33 +147,48 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
   const [timedRunning, setTimedRunning] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  const [finishOpen, setFinishOpen] = useState(false);
+  const sessionRef = useRef(session);
+
+  sessionRef.current = session;
 
   const wakeLockOn = settings.wakeLockEnabled !== false;
   useWakeLock(wakeLockOn && session?.status === "active");
 
-  const startedAt = session?.startedAt;
-  const sessionStatus = session?.status;
+  useEffect(() => {
+    if (sessionId) setActiveSessionId(sessionId);
+  }, [sessionId]);
 
   useEffect(() => {
-    if (!startedAt || sessionStatus !== "active") return;
-    const tick = () => {
-      setElapsed(
-        Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000),
-      );
+    const s = sessionRef.current;
+    if (!s || s.status !== "active") return;
+    if (s.pausedElapsedSeconds !== undefined && !s.resumedAt) {
+      upsertSession(resumeSession(s));
+    }
+  }, [sessionId, upsertSession]);
+
+  useEffect(() => {
+    return () => {
+      const s = sessionRef.current;
+      if (!s || s.status !== "active") return;
+      if (s.resumedAt) {
+        upsertSession(pauseSession(s));
+      }
     };
+  }, [sessionId, upsertSession]);
+
+  useEffect(() => {
+    if (!session || session.status !== "active") return;
+    const tick = () => setElapsed(getSessionElapsedSeconds(session));
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [session?.id, startedAt, sessionStatus]);
+  }, [session]);
 
   const rest = useRestTimer({
     soundEnabled: settings.soundEnabled,
     vibrationEnabled: settings.vibrationEnabled,
   });
-
-  useEffect(() => {
-    if (sessionId) localStorage.setItem(ACTIVE_KEY, sessionId);
-  }, [sessionId]);
 
   useEffect(() => {
     loadExerciseIndex().then((idx) => {
@@ -316,25 +334,17 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
 
   function finishSession() {
     if (!session) return;
-    const completed: Session = {
-      ...session,
-      status: "completed",
-      completedAt: new Date().toISOString(),
-    };
-    const previous = sessions.filter(
-      (s) => s.id !== session.id && s.status === "completed",
-    );
-    completed.prs = detectPRs(completed, previous);
+    const completed = completeSession(session, sessions);
     updateSession(completed);
-    localStorage.removeItem(ACTIVE_KEY);
+    setActiveSessionId(null);
+    setFinishOpen(false);
     router.push(`/history/${completed.id}?done=1`);
   }
 
-  function abandonSession() {
+  function minimizeSession() {
     if (!session) return;
-    updateSession({ ...session, status: "abandoned" });
-    localStorage.removeItem(ACTIVE_KEY);
-    router.push("/routines");
+    updateSession(pauseSession(session));
+    router.push("/");
   }
 
   const pickerList = useMemo(() => {
@@ -435,25 +445,32 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
         <button
           type="button"
           className="flex h-11 w-11 items-center justify-center text-xl touch-manipulation"
-          aria-label="Esci"
-          onClick={abandonSession}
+          aria-label="Metti in pausa"
+          onClick={minimizeSession}
         >
           ⌄
         </button>
         <div className="flex flex-1 justify-center text-muted" aria-hidden>
           ⏱
         </div>
-        <Button type="button" variant="accent" onClick={finishSession}>
+        <Button type="button" variant="accent" onClick={() => setFinishOpen(true)}>
           Fine
         </Button>
       </header>
+
+      <FinishWorkoutModal
+        open={finishOpen}
+        sessionName={session.routineName}
+        onClose={() => setFinishOpen(false)}
+        onConfirm={finishSession}
+      />
 
       <div className="mb-4 grid grid-cols-3 gap-2 border border-hairline px-3 py-3">
         <div className="text-center">
           <div className="text-[10px] uppercase tracking-wide text-muted">
             Durata
           </div>
-          <Mono className="text-lg text-accent">{formatElapsed(elapsed)}</Mono>
+          <Mono className="text-lg text-accent">{formatSessionElapsed(elapsed)}</Mono>
         </div>
         <div className="border-x border-hairline text-center">
           <div className="text-[10px] uppercase tracking-wide text-muted">
@@ -843,7 +860,4 @@ function SetsBlock({
   );
 }
 
-export function getActiveSessionId(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(ACTIVE_KEY);
-}
+export { getActiveSessionId } from "@/lib/session-active";

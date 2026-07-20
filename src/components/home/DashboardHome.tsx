@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
-import { getActiveSessionId } from "@/components/session/LiveSession";
+import { findActiveSession } from "@/lib/session-active";
 import { EmptyState, Mono } from "@/components/ui/primitives";
 import { CalendarStreak } from "@/components/history/CalendarStreak";
 import {
@@ -26,11 +26,9 @@ export function DashboardHome() {
     settings,
     bodyweightLog,
   } = useAppStore();
-  const [activeId, setActiveId] = useState<string | null>(null);
 
-  useEffect(() => {
-    setActiveId(getActiveSessionId());
-  }, [sessions]);
+  const activeSession = useMemo(() => findActiveSession(sessions), [sessions]);
+  const hasActive = Boolean(activeSession);
 
   const completed = useMemo(
     () =>
@@ -48,10 +46,6 @@ export function DashboardHome() {
     toDateKey(s.completedAt ?? s.startedAt),
   );
   const streak = computeStreak(dateKeys);
-
-  const hasActive =
-    !!activeId &&
-    sessions.some((s) => s.id === activeId && s.status === "active");
 
   const greetingName = useMemo(() => {
     const custom = settings.displayName?.trim();
@@ -124,10 +118,6 @@ export function DashboardHome() {
   );
 
   function onFabClick() {
-    if (hasActive) {
-      router.push(`/session/live?id=${activeId}`);
-      return;
-    }
     router.push("/session/start");
   }
 
@@ -246,15 +236,17 @@ export function DashboardHome() {
         )}
       </section>
 
-      {/* Sticky FAB */}
-      <button
-        type="button"
-        onClick={onFabClick}
-        className="fixed bottom-[calc(4.25rem+env(safe-area-inset-bottom))] right-4 z-50 flex min-h-12 max-w-[calc(100%-2rem)] items-center gap-2 bg-accent px-5 py-3 font-display text-sm font-bold tracking-tight text-chalk shadow-lg touch-manipulation focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:opacity-90 sm:right-[max(1rem,calc(50%-16rem+1rem))]"
-        aria-label={hasActive ? "Riprendi allenamento" : "Inizia allenamento"}
-      >
-        {hasActive ? "Riprendi" : "Inizia allenamento"}
-      </button>
+      {/* Sticky FAB — only when no workout in progress (bar handles resume) */}
+      {!hasActive && (
+        <button
+          type="button"
+          onClick={onFabClick}
+          className="fixed bottom-[calc(4.25rem+env(safe-area-inset-bottom))] right-4 z-50 flex min-h-12 max-w-[calc(100%-2rem)] items-center gap-2 bg-accent px-5 py-3 font-display text-sm font-bold tracking-tight text-chalk shadow-lg touch-manipulation focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:opacity-90 sm:right-[max(1rem,calc(50%-16rem+1rem))]"
+          aria-label="Inizia allenamento"
+        >
+          Inizia allenamento
+        </button>
+      )}
 
     </div>
   );

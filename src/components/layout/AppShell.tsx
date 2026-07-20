@@ -4,6 +4,9 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 import { useAuth } from "@/lib/auth";
+import { useAppStore } from "@/lib/store";
+import { findActiveSession } from "@/lib/session-active";
+import { ActiveWorkoutBar } from "@/components/session/ActiveWorkoutBar";
 
 const TABS = [
   {
@@ -121,10 +124,18 @@ export function AppShell({
   hideNav?: boolean;
 }) {
   const pathname = usePathname();
+  const { sessions } = useAppStore();
   const isLive = pathname.startsWith("/session/live");
   const isHome = pathname === "/";
   const showNav = !hideNav && !isLive;
   const showTopBar = showNav && !isHome;
+  const hasActiveWorkout =
+    !isLive && Boolean(findActiveSession(sessions));
+  const mainBottomPad = showNav
+    ? hasActiveWorkout
+      ? "pb-[calc(8.25rem+env(safe-area-inset-bottom))]"
+      : "pb-[calc(4.75rem+env(safe-area-inset-bottom))]"
+    : "pb-[env(safe-area-inset-bottom)]";
 
   return (
     <div className="min-h-dvh bg-chalk text-ink">
@@ -138,15 +149,15 @@ export function AppShell({
         className={
           isLive
             ? ""
-            : `mx-auto max-w-lg px-4 py-4 ${
-                showNav
-                  ? "pb-[calc(4.75rem+env(safe-area-inset-bottom))]"
-                  : "pb-[env(safe-area-inset-bottom)]"
-              } ${isHome ? "pt-[max(1rem,env(safe-area-inset-top))]" : ""}`
+            : `mx-auto max-w-lg px-4 py-4 ${mainBottomPad} ${
+                isHome ? "pt-[max(1rem,env(safe-area-inset-top))]" : ""
+              }`
         }
       >
         {children}
       </main>
+
+      {showNav && <ActiveWorkoutBar />}
 
       {showNav && (
         <nav

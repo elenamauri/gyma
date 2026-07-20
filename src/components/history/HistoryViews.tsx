@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import type { Session } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
 import { uid } from "@/lib/storage";
+import { setActiveSessionId } from "@/lib/session-active";
 import { computeStreak, toDateKey } from "@/lib/utils";
 import { Button, EmptyState, Mono } from "@/components/ui/primitives";
 import { CalendarStreak } from "@/components/history/CalendarStreak";
@@ -31,6 +32,7 @@ export function HistoryPage() {
   const streak = computeStreak(dateKeys);
 
   function repeatSession(session: Session) {
+    const now = new Date().toISOString();
     const copy: Session = {
       id: uid(),
       routineId: session.routineId,
@@ -40,7 +42,9 @@ export function HistoryPage() {
       type: session.type,
       status: "active",
       notes: session.notes,
-      startedAt: new Date().toISOString(),
+      startedAt: now,
+      resumedAt: now,
+      pausedElapsedSeconds: 0,
       exercises: session.exercises.map((ex) => ({
         ...ex,
         id: uid(),
@@ -53,6 +57,7 @@ export function HistoryPage() {
       })),
     };
     upsertSession(copy);
+    setActiveSessionId(copy.id);
     router.push(`/session/live?id=${copy.id}`);
   }
 

@@ -114,6 +114,12 @@ export interface Session {
   notes?: string;
   startedAt: string;
   completedAt?: string;
+  /** Active time accumulated while away from live view (seconds). */
+  pausedElapsedSeconds?: number;
+  /** When the timer last resumed; undefined while paused. */
+  resumedAt?: string;
+  /** Workout duration at completion (active seconds, excludes pauses). */
+  durationSeconds?: number;
   prs?: PersonalRecord[];
 }
 

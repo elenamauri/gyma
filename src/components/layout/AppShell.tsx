@@ -63,6 +63,12 @@ function resolveChrome(
   if (pathname === "/routines/import") {
     return { title: "Import AI", backHref: "/routines" };
   }
+  if (pathname === "/routines/import/pick") {
+    return {
+      title: "Catalogo",
+      backHref: returnTo || "/routines/import",
+    };
+  }
   if (pathname === "/routines/new") {
     return {
       title: "Nuova routine",

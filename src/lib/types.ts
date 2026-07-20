@@ -207,6 +207,12 @@ export interface AiRoutineImport {
   }>;
 }
 
+/** Full program with multiple routines (import script). */
+export interface AiProgramImport {
+  name: string;
+  routines: AiRoutineImport[];
+}
+
 export interface FuzzyMatchResult {
   importedName: string;
   matched?: ExerciseIndexEntry;

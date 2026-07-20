@@ -1,120 +1,160 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type Fuse from "fuse.js";
-import { AI_ROUTINE_PROMPT } from "@/lib/ai";
+import { AI_IMPORT_PROMPT } from "@/lib/ai";
 import {
+  buildProgramFromImport,
   buildRoutineFromResolved,
-  parseAiRoutineJson,
+  parseAiImportJson,
   resolveAiImport,
-  type ResolvedImportExercise,
+  resolveProgramImport,
 } from "@/lib/ai-import";
-import type { ExerciseIndexEntry } from "@/lib/types";
+import {
+  clearImportDraft,
+  importDraftNeedsPicks,
+  loadImportDraft,
+  saveImportDraft,
+  type ImportDraft,
+} from "@/lib/import-draft";
 import { useAppStore } from "@/lib/store";
 import { useExerciseCatalog } from "@/hooks/useExerciseCatalog";
-import {
-  Button,
-  Input,
-  Label,
-  Select,
-  Textarea,
-} from "@/components/ui/primitives";
+import { Button, Label, Select, Textarea } from "@/components/ui/primitives";
 import Link from "next/link";
+
+const IMPORT_RETURN = "/routines/import";
 
 export function AiRoutineImportPanel() {
   const router = useRouter();
   const params = useSearchParams();
-  const { upsertRoutine, programs } = useAppStore();
-  const { exercises, fuse, loading } = useExerciseCatalog();
+  const { upsertRoutine, upsertProgram, programs } = useAppStore();
+  const { exercises, loading } = useExerciseCatalog();
   const [raw, setRaw] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [resolved, setResolved] = useState<ResolvedImportExercise[] | null>(
-    null,
-  );
-  const [importName, setImportName] = useState("");
-  const [importType, setImportType] = useState<"reps" | "timed">("reps");
+  const [draft, setDraft] = useState<ImportDraft | null>(null);
   const [programId, setProgramId] = useState(
     () => params.get("programId") || programs[0]?.id || "",
   );
-  /** Index of the row currently picking from the full catalog. */
-  const [pickingIdx, setPickingIdx] = useState<number | null>(null);
+
+  const restoreDraft = useCallback(() => {
+    const saved = loadImportDraft();
+    if (saved?.returnPath === IMPORT_RETURN) {
+      setDraft(saved);
+      if (saved.programId) setProgramId(saved.programId);
+    }
+  }, []);
+
+  useEffect(() => {
+    restoreDraft();
+  }, [restoreDraft]);
 
   async function copyPrompt() {
-    await navigator.clipboard.writeText(AI_ROUTINE_PROMPT);
+    await navigator.clipboard.writeText(AI_IMPORT_PROMPT);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
 
   function validateAndMatch() {
     setError(null);
-    setPickingIdx(null);
-    const result = parseAiRoutineJson(raw);
-    if (!result.ok || !result.data) {
-      setError(result.error ?? "Errore di validazione");
-      setResolved(null);
+    const result = parseAiImportJson(raw);
+    if (!result.ok) {
+      setError(result.error);
+      setDraft(null);
+      clearImportDraft();
       return;
     }
-    setImportName(result.data.name);
-    setImportType(result.data.type);
-    const next = resolveAiImport(result.data, exercises);
-    setResolved(next);
-    const firstMissing = next.findIndex(
-      (r) => r.needsManualPick || !r.exerciseId,
-    );
-    if (firstMissing >= 0) setPickingIdx(firstMissing);
+
+    if (result.parsed.kind === "routine") {
+      const r = result.parsed.routine;
+      const next: ImportDraft = {
+        returnPath: IMPORT_RETURN,
+        mode: "routine",
+        programId: programId || programs[0]?.id,
+        routine: {
+          name: r.name,
+          type: r.type,
+          exercises: resolveAiImport(r, exercises),
+        },
+      };
+      setDraft(next);
+      saveImportDraft(next);
+      return;
+    }
+
+    const p = result.parsed.program;
+    const next: ImportDraft = {
+      returnPath: IMPORT_RETURN,
+      mode: "program",
+      program: {
+        name: p.name,
+        routines: resolveProgramImport(p, exercises),
+      },
+    };
+    setDraft(next);
+    saveImportDraft(next);
   }
 
-  function assignExercise(idx: number, pick: ExerciseIndexEntry) {
-    setResolved((prev) =>
-      prev
-        ? prev.map((r, i) =>
-            i === idx
-              ? {
-                  ...r,
-                  exerciseId: pick.id,
-                  exerciseName: pick.name,
-                  needsManualPick: false,
-                }
-              : r,
-          )
-        : prev,
+  function openCatalogPick(routineIndex: number, exerciseIndex: number) {
+    if (!draft) return;
+    saveImportDraft(draft);
+    router.push(
+      `/routines/import/pick?routine=${routineIndex}&row=${exerciseIndex}&return=${encodeURIComponent(IMPORT_RETURN)}`,
     );
-    setPickingIdx(null);
   }
 
-  const needsPicks = useMemo(
-    () => resolved?.some((r) => !r.exerciseId) ?? false,
-    [resolved],
-  );
+  const needsPicks = draft ? importDraftNeedsPicks(draft) : false;
 
   function save() {
-    if (!resolved) return;
-    const pid = programId || programs[0]?.id;
-    if (!pid) {
-      setError("Crea prima un programma, poi importa la routine.");
+    if (!draft) return;
+    setError(null);
+
+    if (draft.mode === "routine" && draft.routine) {
+      const pid = draft.programId || programId || programs[0]?.id;
+      if (!pid) {
+        setError("Crea prima un programma, poi importa la routine.");
+        return;
+      }
+      const built = buildRoutineFromResolved(
+        draft.routine.name,
+        draft.routine.type,
+        draft.routine.exercises,
+        pid,
+      );
+      if ("error" in built) {
+        setError(built.error);
+        return;
+      }
+      upsertRoutine(built);
+      clearImportDraft();
+      router.push(`/routines/programs/${pid}`);
       return;
     }
-    const built = buildRoutineFromResolved(
-      importName,
-      importType,
-      resolved,
-      pid,
-    );
-    if ("error" in built) {
-      setError(built.error);
-      return;
+
+    if (draft.mode === "program" && draft.program) {
+      const built = buildProgramFromImport(
+        draft.program.name,
+        draft.program.routines,
+      );
+      if ("error" in built) {
+        setError(built.error);
+        return;
+      }
+      upsertProgram(built.program);
+      for (const r of built.routines) upsertRoutine(r);
+      clearImportDraft();
+      router.push(`/routines/programs/${built.program.id}`);
     }
-    upsertRoutine(built);
-    router.push(`/routines/programs/${pid}`);
   }
 
-  if (programs.length === 0) {
+  const canImportRoutine = programs.length > 0 || draft?.mode === "program";
+
+  if (!canImportRoutine && !draft) {
     return (
       <div className="space-y-4">
         <p className="text-sm text-muted">
-          Per importare una routine serve almeno un programma.
+          Per importare una singola routine serve almeno un programma. Puoi
+          importare un programma intero senza programmi esistenti.
         </p>
         <Link href="/routines/programs/new">
           <Button type="button" variant="accent">
@@ -128,41 +168,45 @@ export function AiRoutineImportPanel() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted">
-        Copia il prompt, chiedi a Claude una routine, poi incolla il JSON qui.
-        Controlla e correggi gli abbinamenti sul catalogo.
+        Copia il prompt per Claude, incolla il JSON (routine singola o programma
+        con più routine). Correggi gli abbinamenti aprendo il catalogo.
       </p>
 
-      <div>
-        <Label htmlFor="import-program">Programma</Label>
-        <Select
-          id="import-program"
-          value={programId || programs[0]?.id}
-          onChange={(e) => setProgramId(e.target.value)}
-        >
-          {programs.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </Select>
-      </div>
+      {(!draft || draft.mode === "routine") && programs.length > 0 && (
+        <div>
+          <Label htmlFor="import-program">Programma destinazione (routine)</Label>
+          <Select
+            id="import-program"
+            value={programId || programs[0]?.id}
+            onChange={(e) => setProgramId(e.target.value)}
+          >
+            {programs.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <Button type="button" variant="ghost" onClick={copyPrompt}>
           {copied ? "Prompt copiato" : "Copia prompt per Claude"}
         </Button>
       </div>
+
       <div>
-        <Label htmlFor="ai-json">Importa routine (JSON)</Label>
+        <Label htmlFor="ai-json">Importa JSON</Label>
         <Textarea
           id="ai-json"
-          rows={8}
+          rows={10}
           value={raw}
           onChange={(e) => setRaw(e.target.value)}
-          placeholder='{"name":"...","type":"reps","exercises":[...]}'
+          placeholder='Routine: {"name":"...","type":"reps","exercises":[...]} — Programma: {"name":"...","routines":[...]}'
           className="font-mono text-xs"
         />
       </div>
+
       <Button
         type="button"
         onClick={validateAndMatch}
@@ -172,162 +216,103 @@ export function AiRoutineImportPanel() {
       </Button>
       {error && <p className="text-sm text-accent">{error}</p>}
 
-      {resolved && (
-        <div className="space-y-3">
-          <p className="text-sm">
-            Routine: <strong>{importName}</strong> · tipo {importType}
-          </p>
-          <ul className="divide-y divide-hairline">
-            {resolved.map((item, idx) => {
-              const missing = !item.exerciseId;
-              const isPicking = pickingIdx === idx;
-              return (
-                <li
-                  key={`${item.importedName}-${idx}`}
-                  className="space-y-2 py-3"
-                >
-                  <div className="text-sm">
-                    Importato:{" "}
-                    <span className="font-mono">{item.importedName}</span>
-                  </div>
+      {draft?.mode === "routine" && draft.routine && (
+        <ImportReview
+          title={`Routine: ${draft.routine.name}`}
+          subtitle={`Tipo ${draft.routine.type}`}
+          routines={[{ ...draft.routine, routineIndex: 0 }]}
+          onPick={openCatalogPick}
+        />
+      )}
 
-                  {!isPicking && (
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 text-sm">
-                        {missing ? (
-                          <span className="text-accent">Nessun match</span>
-                        ) : (
-                          <>
-                            <span className="text-muted">Abbinato: </span>
-                            <span className="font-medium">
-                              {item.exerciseName}
-                            </span>
-                            {item.needsManualPick === false &&
-                              item.importedName.toLowerCase() !==
-                                (item.exerciseName ?? "").toLowerCase() && (
-                                <span className="ml-1 text-xs text-muted">
-                                  (auto)
-                                </span>
-                              )}
-                          </>
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        className="shrink-0 text-sm text-accent touch-manipulation underline-offset-2 hover:underline"
-                        onClick={() => setPickingIdx(idx)}
-                      >
-                        {missing ? "Scegli" : "Cambia"}
-                      </button>
-                    </div>
-                  )}
+      {draft?.mode === "program" && draft.program && (
+        <ImportReview
+          title={`Programma: ${draft.program.name}`}
+          subtitle={`${draft.program.routines.length} routine`}
+          routines={draft.program.routines.map((r, routineIndex) => ({
+            ...r,
+            routineIndex,
+          }))}
+          onPick={openCatalogPick}
+        />
+      )}
 
-                  {isPicking && (
-                    <CatalogPicker
-                      suggestions={item.suggestions}
-                      catalog={exercises}
-                      fuse={fuse}
-                      initialQuery={missing ? item.importedName : ""}
-                      onPick={(ex) => assignExercise(idx, ex)}
-                      onCancel={() => setPickingIdx(null)}
-                    />
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+      {draft && (
+        <>
           <Button type="button" onClick={save} disabled={needsPicks}>
-            Crea routine
+            {draft.mode === "program" ? "Crea programma" : "Crea routine"}
           </Button>
           {needsPicks && (
             <p className="text-xs text-muted">
               Seleziona un esercizio dal catalogo per ogni riga senza match.
             </p>
           )}
-        </div>
+        </>
       )}
     </div>
   );
 }
 
-function CatalogPicker({
-  suggestions,
-  catalog,
-  fuse,
-  initialQuery,
+function ImportReview({
+  title,
+  subtitle,
+  routines,
   onPick,
-  onCancel,
 }: {
-  suggestions: ExerciseIndexEntry[];
-  catalog: ExerciseIndexEntry[];
-  fuse: Fuse<ExerciseIndexEntry> | null;
-  initialQuery: string;
-  onPick: (ex: ExerciseIndexEntry) => void;
-  onCancel: () => void;
+  title: string;
+  subtitle: string;
+  routines: Array<{
+    routineIndex: number;
+    name: string;
+    type: string;
+    exercises: import("@/lib/ai-import").ResolvedImportExercise[];
+  }>;
+  onPick: (routineIndex: number, exerciseIndex: number) => void;
 }) {
-  const [query, setQuery] = useState(initialQuery);
-
-  const results = useMemo(() => {
-    const q = query.trim();
-    if (!q) {
-      if (suggestions.length > 0) return suggestions;
-      return catalog.slice(0, 50);
-    }
-    if (fuse) {
-      return fuse.search(q).slice(0, 60).map((r) => r.item);
-    }
-    const lower = q.toLowerCase();
-    return catalog
-      .filter((e) => e.name.toLowerCase().includes(lower))
-      .slice(0, 60);
-  }, [query, fuse, catalog, suggestions]);
-
-  const showSuggestionsHint = !query.trim() && suggestions.length > 0;
-
   return (
-    <div className="space-y-2 border border-hairline bg-chalk p-3">
-      <div className="flex items-center justify-between gap-2">
-        <Label htmlFor="import-catalog-search">Cerca nel catalogo</Label>
-        <button
-          type="button"
-          className="text-xs text-muted touch-manipulation hover:text-ink"
-          onClick={onCancel}
-        >
-          Annulla
-        </button>
+    <div className="space-y-4">
+      <div>
+        <p className="text-sm font-medium">{title}</p>
+        <p className="text-xs text-muted">{subtitle}</p>
       </div>
-      <Input
-        id="import-catalog-search"
-        type="search"
-        autoFocus
-        placeholder="Nome esercizio…"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
-      {showSuggestionsHint && (
-        <p className="text-xs text-muted">Suggerimenti fuzzy · oppure cerca</p>
-      )}
-      <ul className="max-h-56 divide-y divide-hairline overflow-y-auto">
-        {results.length === 0 ? (
-          <li className="py-3 text-sm text-muted">Nessun risultato</li>
-        ) : (
-          results.map((ex) => (
-            <li key={ex.id}>
-              <button
-                type="button"
-                className="flex w-full flex-col items-start gap-0.5 py-2.5 text-left touch-manipulation hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
-                onClick={() => onPick(ex)}
-              >
-                <span className="text-sm font-medium">{ex.name}</span>
-                <span className="text-xs text-muted">
-                  {ex.primaryMuscles.slice(0, 2).join(", ") || "—"}
-                  {ex.equipment ? ` · ${ex.equipment}` : ""}
-                </span>
-              </button>
-            </li>
-          ))
-        )}
-      </ul>
+      {routines.map((routine) => (
+        <section key={`${routine.name}-${routine.routineIndex}`} className="space-y-2">
+          {routines.length > 1 && (
+            <h3 className="text-xs font-medium uppercase tracking-wide text-muted">
+              {routine.name} · {routine.type}
+            </h3>
+          )}
+          <ul className="divide-y divide-hairline">
+            {routine.exercises.map((item, exerciseIndex) => {
+              const missing = !item.exerciseId;
+              return (
+                <li
+                  key={`${item.importedName}-${exerciseIndex}`}
+                  className="flex items-start justify-between gap-3 py-3"
+                >
+                  <div className="min-w-0 text-sm">
+                    <div className="font-mono text-xs text-muted">
+                      {item.importedName}
+                    </div>
+                    {missing ? (
+                      <span className="text-accent">Nessun match</span>
+                    ) : (
+                      <span className="font-medium">{item.exerciseName}</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="shrink-0 text-sm text-accent touch-manipulation underline-offset-2 hover:underline"
+                    onClick={() => onPick(routine.routineIndex, exerciseIndex)}
+                  >
+                    {missing ? "Catalogo" : "Cambia"}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
     </div>
   );
 }

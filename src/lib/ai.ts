@@ -114,21 +114,44 @@ export function buildAiSummary(
   return lines.join("\n");
 }
 
-export const AI_ROUTINE_PROMPT = `Rispondi SOLO con JSON in questo formato, senza testo aggiuntivo:
+export const AI_IMPORT_PROMPT = `Rispondi SOLO con JSON valido, senza testo aggiuntivo.
+
+## Opzione A — singola routine
 {
   "name": "Nome routine",
   "type": "reps",
   "exercises": [
-    { "name": "Nome esercizio in inglese (es. Barbell Bench Press)", "sets": 4, "reps": 8, "restSeconds": 90, "targetWeight": 60 }
+    { "name": "Barbell Bench Press", "sets": 4, "reps": 8, "restSeconds": 90, "targetWeight": 60 }
   ]
 }
 
-Per routine a tempo (circuiti/HIIT/stretching) usa:
+Per routine a tempo (circuiti/HIIT/stretching):
 {
   "name": "Nome circuito",
   "type": "timed",
   "exercises": [
-    { "name": "Nome esercizio", "durationSeconds": 40, "restSeconds": 20 }
+    { "name": "Plank", "durationSeconds": 40, "restSeconds": 20 }
+  ]
+}
+
+## Opzione B — programma intero (più routine)
+{
+  "name": "Nome programma",
+  "routines": [
+    {
+      "name": "Giorno A",
+      "type": "reps",
+      "exercises": [
+        { "name": "Barbell Squat", "sets": 4, "reps": 6, "restSeconds": 120 }
+      ]
+    },
+    {
+      "name": "Giorno B",
+      "type": "reps",
+      "exercises": [
+        { "name": "Deadlift", "sets": 3, "reps": 5, "restSeconds": 180 }
+      ]
+    }
   ]
 }
 
@@ -138,3 +161,6 @@ Regole:
 - Per type "reps": sets, reps, restSeconds obbligatori; targetWeight opzionale (kg)
 - Per type "timed": durationSeconds e restSeconds obbligatori
 - Nessun markdown, nessun commento, solo JSON valido`;
+
+/** @deprecated use AI_IMPORT_PROMPT */
+export const AI_ROUTINE_PROMPT = AI_IMPORT_PROMPT;

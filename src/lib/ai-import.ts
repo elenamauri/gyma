@@ -1,12 +1,16 @@
 import type {
+  AiProgramImport,
   AiRoutineImport,
   ExerciseIndexEntry,
+  Program,
   Routine,
   RoutineExerciseReps,
   RoutineExerciseTimed,
+  RoutineType,
 } from "./types";
 import { fuzzyMatchExerciseName } from "./exercises";
 import { pickRoutineColor, uid } from "./storage";
+import type { ImportRoutineDraft } from "./import-draft";
 
 export interface ResolvedImportExercise {
   importedName: string;
@@ -27,14 +31,68 @@ export interface ImportValidation {
   data?: AiRoutineImport;
 }
 
-export function parseAiRoutineJson(raw: string): ImportValidation {
+export type ParsedImport =
+  | { kind: "routine"; routine: AiRoutineImport }
+  | { kind: "program"; program: AiProgramImport };
+
+export type ParseImportResult =
+  | { ok: true; parsed: ParsedImport }
+  | { ok: false; error: string };
+
+function cleanImportJson(raw: string): unknown {
+  const cleaned = raw
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "");
+  return JSON.parse(cleaned);
+}
+
+function validateExerciseList(
+  type: RoutineType,
+  exercises: unknown[],
+  label: string,
+): string | null {
+  if (!Array.isArray(exercises) || exercises.length === 0) {
+    return `${label}: "exercises" deve essere un array non vuoto.`;
+  }
+  for (let i = 0; i < exercises.length; i++) {
+    const ex = exercises[i] as Record<string, unknown>;
+    if (typeof ex.name !== "string" || !ex.name.trim()) {
+      return `${label}, esercizio #${i + 1}: nome mancante.`;
+    }
+    if (type === "reps") {
+      if (typeof ex.sets !== "number" || typeof ex.reps !== "number") {
+        return `${label}, esercizio #${i + 1}: sets e reps obbligatori per type "reps".`;
+      }
+    } else if (typeof ex.durationSeconds !== "number") {
+      return `${label}, esercizio #${i + 1}: durationSeconds obbligatorio per type "timed".`;
+    }
+  }
+  return null;
+}
+
+function validateRoutineShape(
+  obj: Record<string, unknown>,
+  label: string,
+): string | null {
+  if (typeof obj.name !== "string" || !obj.name.trim()) {
+    return `${label}: "name" mancante o vuoto.`;
+  }
+  if (obj.type !== "reps" && obj.type !== "timed") {
+    return `${label}: "type" deve essere "reps" o "timed".`;
+  }
+  return validateExerciseList(
+    obj.type as RoutineType,
+    obj.exercises as unknown[],
+    label,
+  );
+}
+
+/** Parse JSON for a single routine or a full program (with "routines" array). */
+export function parseAiImportJson(raw: string): ParseImportResult {
   let parsed: unknown;
   try {
-    const cleaned = raw
-      .trim()
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/\s*```$/, "");
-    parsed = JSON.parse(cleaned);
+    parsed = cleanImportJson(raw);
   } catch {
     return { ok: false, error: "JSON non valido. Incolla solo il JSON di Claude." };
   }
@@ -44,37 +102,47 @@ export function parseAiRoutineJson(raw: string): ImportValidation {
   }
 
   const obj = parsed as Record<string, unknown>;
-  if (typeof obj.name !== "string" || !obj.name.trim()) {
-    return { ok: false, error: 'Campo "name" mancante o vuoto.' };
-  }
-  if (obj.type !== "reps" && obj.type !== "timed") {
-    return { ok: false, error: 'Campo "type" deve essere "reps" o "timed".' };
-  }
-  if (!Array.isArray(obj.exercises) || obj.exercises.length === 0) {
-    return { ok: false, error: 'Campo "exercises" deve essere un array non vuoto.' };
-  }
 
-  for (let i = 0; i < obj.exercises.length; i++) {
-    const ex = obj.exercises[i] as Record<string, unknown>;
-    if (typeof ex.name !== "string" || !ex.name.trim()) {
-      return { ok: false, error: `Esercizio #${i + 1}: nome mancante.` };
+  if (Array.isArray(obj.routines)) {
+    if (typeof obj.name !== "string" || !obj.name.trim()) {
+      return { ok: false, error: 'Programma: campo "name" mancante o vuoto.' };
     }
-    if (obj.type === "reps") {
-      if (typeof ex.sets !== "number" || typeof ex.reps !== "number") {
-        return {
-          ok: false,
-          error: `Esercizio #${i + 1}: sets e reps obbligatori per type "reps".`,
-        };
-      }
-    } else if (typeof ex.durationSeconds !== "number") {
+    if (obj.routines.length === 0) {
       return {
         ok: false,
-        error: `Esercizio #${i + 1}: durationSeconds obbligatorio per type "timed".`,
+        error: 'Programma: "routines" deve contenere almeno una routine.',
       };
     }
+    for (let i = 0; i < obj.routines.length; i++) {
+      const r = obj.routines[i] as Record<string, unknown>;
+      const err = validateRoutineShape(r, `Routine #${i + 1}`);
+      if (err) return { ok: false, error: err };
+    }
+    return {
+      ok: true,
+      parsed: { kind: "program", program: parsed as AiProgramImport },
+    };
   }
 
-  return { ok: true, data: parsed as AiRoutineImport };
+  const err = validateRoutineShape(obj, "Routine");
+  if (err) return { ok: false, error: err };
+  return {
+    ok: true,
+    parsed: { kind: "routine", routine: parsed as AiRoutineImport },
+  };
+}
+
+export function parseAiRoutineJson(raw: string): ImportValidation {
+  const result = parseAiImportJson(raw);
+  if (!result.ok) return { ok: false, error: result.error };
+  if (result.parsed.kind === "program") {
+    return {
+      ok: false,
+      error:
+        'JSON di programma rilevato. Usa "Valida e abbina" — verrà importato l\'intero programma.',
+    };
+  }
+  return { ok: true, data: result.parsed.routine };
 }
 
 export function resolveAiImport(
@@ -98,9 +166,20 @@ export function resolveAiImport(
   });
 }
 
+export function resolveProgramImport(
+  data: AiProgramImport,
+  catalog: ExerciseIndexEntry[],
+): ImportRoutineDraft[] {
+  return data.routines.map((routine) => ({
+    name: routine.name,
+    type: routine.type,
+    exercises: resolveAiImport(routine, catalog),
+  }));
+}
+
 export function buildRoutineFromResolved(
   name: string,
-  type: "reps" | "timed",
+  type: RoutineType,
   resolved: ResolvedImportExercise[],
   programId: string,
 ): Routine | { error: string } {
@@ -157,4 +236,32 @@ export function buildRoutineFromResolved(
     createdAt: now,
     updatedAt: now,
   };
+}
+
+export function buildProgramFromImport(
+  programName: string,
+  routineDrafts: ImportRoutineDraft[],
+): { program: Program; routines: Routine[] } | { error: string } {
+  const now = new Date().toISOString();
+  const programId = uid();
+  const program: Program = {
+    id: programId,
+    name: programName,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const routines: Routine[] = [];
+  for (const draft of routineDrafts) {
+    const built = buildRoutineFromResolved(
+      draft.name,
+      draft.type,
+      draft.exercises,
+      programId,
+    );
+    if ("error" in built) return { error: built.error };
+    routines.push(built);
+  }
+
+  return { program, routines };
 }

@@ -59,6 +59,17 @@ export function ActiveWorkoutBar() {
             <div className="text-xs text-muted">
               In pausa ·{" "}
               <Mono className="text-ink">{formatSessionElapsed(elapsed)}</Mono>
+              {session.exercises.length > 0 && (
+                <>
+                  {" "}
+                  · esercizio{" "}
+                  {Math.min(
+                    (session.activeExerciseIndex ?? 0) + 1,
+                    session.exercises.length,
+                  )}
+                  /{session.exercises.length}
+                </>
+              )}
             </div>
           </div>
           <Link

@@ -22,9 +22,10 @@ import {
   completeSession,
   formatSessionElapsed,
   getSessionElapsedSeconds,
-  pauseSession,
+  initialExerciseIndex,
   resumeSession,
   setActiveSessionId,
+  snapshotLiveSession,
 } from "@/lib/session-active";
 import { useAppStore } from "@/lib/store";
 import { useRestTimer } from "@/hooks/useRestTimer";
@@ -38,6 +39,7 @@ import {
 import { RestTimerBar } from "@/components/session/RestTimerBar";
 import { ExerciseThumb } from "@/components/exercises/ExerciseThumb";
 import { FinishWorkoutModal } from "@/components/session/FinishWorkoutModal";
+import { ExitWorkoutModal } from "@/components/session/ExitWorkoutModal";
 import { Button, Input, Mono } from "@/components/ui/primitives";
 
 function previousSetsForExercise(
@@ -148,9 +150,13 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [finishOpen, setFinishOpen] = useState(false);
+  const [exitOpen, setExitOpen] = useState(false);
   const sessionRef = useRef(session);
+  const exerciseIndexRef = useRef(0);
+  const indexInitialized = useRef(false);
 
   sessionRef.current = session;
+  exerciseIndexRef.current = exerciseIndex;
 
   const wakeLockOn = settings.wakeLockEnabled !== false;
   useWakeLock(wakeLockOn && session?.status === "active");
@@ -168,12 +174,47 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
   }, [sessionId, upsertSession]);
 
   useEffect(() => {
+    indexInitialized.current = false;
+  }, [sessionId]);
+
+  useEffect(() => {
+    const s = sessionRef.current;
+    if (!s || s.status !== "active" || indexInitialized.current) return;
+    indexInitialized.current = true;
+    setExerciseIndex(initialExerciseIndex(s));
+  }, [session]);
+
+  useEffect(() => {
+    const s = sessionRef.current;
+    if (!s || s.status !== "active") return;
+    if (s.activeExerciseIndex === exerciseIndex) return;
+    upsertSession({ ...s, activeExerciseIndex: exerciseIndex });
+  }, [exerciseIndex, upsertSession]);
+
+  useEffect(() => {
     return () => {
       const s = sessionRef.current;
       if (!s || s.status !== "active") return;
       if (s.resumedAt) {
-        upsertSession(pauseSession(s));
+        upsertSession(snapshotLiveSession(s, exerciseIndexRef.current));
       }
+    };
+  }, [sessionId, upsertSession]);
+
+  useEffect(() => {
+    function flush() {
+      const s = sessionRef.current;
+      if (!s || s.status !== "active") return;
+      upsertSession(snapshotLiveSession(s, exerciseIndexRef.current));
+    }
+    function onVisibilityChange() {
+      if (document.visibilityState === "hidden") flush();
+    }
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [sessionId, upsertSession]);
 
@@ -341,9 +382,10 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
     router.push(`/history/${completed.id}?done=1`);
   }
 
-  function minimizeSession() {
+  function confirmExit() {
     if (!session) return;
-    updateSession(pauseSession(session));
+    updateSession(snapshotLiveSession(session, exerciseIndex));
+    setExitOpen(false);
     router.push("/");
   }
 
@@ -445,8 +487,8 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
         <button
           type="button"
           className="flex h-11 w-11 items-center justify-center text-xl touch-manipulation"
-          aria-label="Metti in pausa"
-          onClick={minimizeSession}
+          aria-label="Esci dall'allenamento"
+          onClick={() => setExitOpen(true)}
         >
           ⌄
         </button>
@@ -463,6 +505,12 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
         sessionName={session.routineName}
         onClose={() => setFinishOpen(false)}
         onConfirm={finishSession}
+      />
+
+      <ExitWorkoutModal
+        open={exitOpen}
+        onClose={() => setExitOpen(false)}
+        onConfirm={confirmExit}
       />
 
       <div className="mb-4 grid grid-cols-3 gap-2 border border-hairline px-3 py-3">

@@ -120,6 +120,8 @@ export interface Session {
   resumedAt?: string;
   /** Workout duration at completion (active seconds, excludes pauses). */
   durationSeconds?: number;
+  /** Last open exercise index while session was active. */
+  activeExerciseIndex?: number;
   prs?: PersonalRecord[];
 }
 

@@ -68,6 +68,26 @@ export function resumeSession(session: Session): Session {
   };
 }
 
+/** Pause timer and persist live UI state (exercise index) for resume later. */
+export function snapshotLiveSession(
+  session: Session,
+  exerciseIndex: number,
+): Session {
+  const paused = pauseSession(session);
+  const max = Math.max(0, paused.exercises.length - 1);
+  const index = Math.min(Math.max(0, exerciseIndex), max);
+  return {
+    ...paused,
+    activeExerciseIndex: index,
+  };
+}
+
+export function initialExerciseIndex(session: Session): number {
+  const max = Math.max(0, session.exercises.length - 1);
+  const idx = session.activeExerciseIndex ?? 0;
+  return Math.min(Math.max(0, idx), max);
+}
+
 export function completeSession(
   session: Session,
   allSessions: Session[],

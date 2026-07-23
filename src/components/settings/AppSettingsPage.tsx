@@ -136,18 +136,24 @@ export function AppSettingsPage() {
             onChange={(e) => updateSettings({ soundEnabled: e.target.checked })}
             className="h-5 w-5 accent-accent"
           />
-          Suono a fine recupero
+          Suono a fine esercizio / recupero
         </label>
-        <label className="flex min-h-11 items-center gap-2 text-sm">
+        <label className="flex min-h-11 items-start gap-2 text-sm">
           <input
             type="checkbox"
             checked={settings.vibrationEnabled}
             onChange={(e) =>
               updateSettings({ vibrationEnabled: e.target.checked })
             }
-            className="h-5 w-5 accent-accent"
+            className="mt-0.5 h-5 w-5 accent-accent"
           />
-          Vibrazione a fine recupero
+          <span>
+            Vibrazione a fine esercizio / recupero
+            <span className="mt-0.5 block text-xs text-muted">
+              Su iPhone Safari la vibrazione non è supportata dal browser — usa
+              il suono.
+            </span>
+          </span>
         </label>
         <label className="flex min-h-11 items-center gap-2 text-sm">
           <input

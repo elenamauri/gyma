@@ -21,10 +21,16 @@ import {
   formatSessionElapsed,
   getSessionElapsedSeconds,
   initialExerciseIndex,
+  isSessionPaused,
   resumeSession,
   setActiveSessionId,
   snapshotLiveSession,
 } from "@/lib/session-active";
+import {
+  playTimedEndSound,
+  unlockAudio,
+  vibrateTimedEnd,
+} from "@/lib/feedback";
 import { useAppStore } from "@/lib/store";
 import { useRestTimer } from "@/hooks/useRestTimer";
 import { useWakeLock } from "@/hooks/useWakeLock";
@@ -143,6 +149,7 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
   const [catalog, setCatalog] = useState<ExerciseIndexEntry[]>([]);
   const [timedLeft, setTimedLeft] = useState<number | null>(null);
   const [timedRunning, setTimedRunning] = useState(false);
+  const timedEndAtRef = useRef<number | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [finishOpen, setFinishOpen] = useState(false);
@@ -161,13 +168,15 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
     if (sessionId) setActiveSessionId(sessionId);
   }, [sessionId]);
 
+  // Resume timer when entering live view (after pause away from page).
   useEffect(() => {
     const s = sessionRef.current;
     if (!s || s.status !== "active") return;
-    if (s.pausedElapsedSeconds !== undefined && !s.resumedAt) {
+    if (isSessionPaused(s)) {
       upsertSession(resumeSession(s));
     }
-  }, [sessionId, upsertSession]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
 
   useEffect(() => {
     indexInitialized.current = false;
@@ -180,6 +189,7 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
     setExerciseIndex(initialExerciseIndex(s));
   }, [session]);
 
+  // Persist exercise index without pausing the workout clock.
   useEffect(() => {
     const s = sessionRef.current;
     if (!s || s.status !== "active") return;
@@ -187,40 +197,75 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
     upsertSession({ ...s, activeExerciseIndex: exerciseIndex });
   }, [exerciseIndex, upsertSession]);
 
+  // Pause only when leaving the live page (true unmount), not when deps churn.
   useEffect(() => {
     return () => {
       const s = sessionRef.current;
       if (!s || s.status !== "active") return;
-      if (s.resumedAt) {
+      if (!isSessionPaused(s)) {
         upsertSession(snapshotLiveSession(s, exerciseIndexRef.current));
       }
     };
-  }, [sessionId, upsertSession]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
 
+  // Background: pause clock when app hides; resume when visible again.
   useEffect(() => {
-    function flush() {
+    function flushPause() {
       const s = sessionRef.current;
-      if (!s || s.status !== "active") return;
+      if (!s || s.status !== "active" || isSessionPaused(s)) return;
       upsertSession(snapshotLiveSession(s, exerciseIndexRef.current));
     }
     function onVisibilityChange() {
-      if (document.visibilityState === "hidden") flush();
+      if (document.visibilityState === "hidden") {
+        flushPause();
+        return;
+      }
+      const s = sessionRef.current;
+      if (!s || s.status !== "active") return;
+      if (isSessionPaused(s)) {
+        upsertSession(resumeSession(s));
+      }
+      void unlockAudio();
     }
-    window.addEventListener("pagehide", flush);
+    window.addEventListener("pagehide", flushPause);
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
-      window.removeEventListener("pagehide", flush);
+      window.removeEventListener("pagehide", flushPause);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [sessionId, upsertSession]);
 
+  // Elapsed clock — always read latest session from ref so pause/resume stick.
   useEffect(() => {
-    if (!session || session.status !== "active") return;
-    const tick = () => setElapsed(getSessionElapsedSeconds(session));
+    if (!sessionId) return;
+    const tick = () => {
+      const s = sessionRef.current;
+      if (!s || s.status !== "active") return;
+      setElapsed(getSessionElapsedSeconds(s));
+    };
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [session]);
+  }, [sessionId]);
+
+  // Unlock audio/vibration after first interaction (iOS requirement).
+  useEffect(() => {
+    function unlock() {
+      void unlockAudio();
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("touchstart", unlock);
+      window.removeEventListener("keydown", unlock);
+    }
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("touchstart", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("touchstart", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, [sessionId]);
 
   const rest = useRestTimer({
     soundEnabled: settings.soundEnabled,
@@ -230,13 +275,13 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     loadExerciseIndex().then((idx) => {
       setCatalog(idx.exercises);
-      if (!session) return;
-      // Enrich primary muscles if missing
-      const needs = session.exercises.some((e) => !e.primaryMuscles?.length);
+      const s = sessionRef.current;
+      if (!s) return;
+      const needs = s.exercises.some((e) => !e.primaryMuscles?.length);
       if (!needs) return;
       const enriched: Session = {
-        ...session,
-        exercises: session.exercises.map((ex) => {
+        ...s,
+        exercises: s.exercises.map((ex) => {
           if (ex.primaryMuscles?.length) return ex;
           const found = idx.exercises.find((e) => e.id === ex.exerciseId);
           return {
@@ -271,20 +316,37 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
     return previousSetsForExercise(sessions, current.exerciseId, session.id);
   }, [sessions, session, current]);
 
-  // Timed auto-advance
+  // Timed exercise countdown (absolute end time — survives background throttling).
   useEffect(() => {
     if (!session || session.type !== "timed" || !current || !timedRunning) return;
-    if (timedLeft === null) return;
-    if (timedLeft <= 0) {
-      setTimedRunning(false);
-      // mark complete and advance
-      completeTimedExercise();
-      return;
+    if (!timedEndAtRef.current) return;
+    let finished = false;
+    const tick = () => {
+      if (!timedEndAtRef.current || finished) return;
+      const left = Math.max(
+        0,
+        Math.ceil((timedEndAtRef.current - Date.now()) / 1000),
+      );
+      setTimedLeft(left);
+      if (left <= 0) {
+        finished = true;
+        timedEndAtRef.current = null;
+        setTimedRunning(false);
+        completeTimedExercise();
+      }
+    };
+    tick();
+    const id = window.setInterval(tick, 200);
+    function onVisible() {
+      if (document.visibilityState === "visible") tick();
     }
-    const id = window.setTimeout(() => setTimedLeft((t) => (t ?? 1) - 1), 1000);
-    return () => window.clearTimeout(id);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timedLeft, timedRunning, session?.id, exerciseIndex]);
+  }, [timedRunning, session?.id, exerciseIndex]);
 
   const updateSession = useCallback(
     (next: Session) => {
@@ -303,6 +365,7 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
 
   function completeSet(setIndex: number, data: Partial<LoggedSet>) {
     if (!session || !current) return;
+    void unlockAudio();
     const sets = current.sets.map((s, i) =>
       i === setIndex
         ? {
@@ -341,6 +404,8 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
 
   function completeTimedExercise() {
     if (!session || !current) return;
+    playTimedEndSound(settings.soundEnabled);
+    vibrateTimedEnd(settings.vibrationEnabled);
     const sets = current.sets.map((s) => ({
       ...s,
       completed: true,
@@ -358,6 +423,7 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
     }
     if (exerciseIndex < session.exercises.length - 1) {
       setExerciseIndex((i) => i + 1);
+      timedEndAtRef.current = null;
       setTimedLeft(null);
       setTimedRunning(false);
     }
@@ -365,7 +431,10 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
 
   function startTimedBlock() {
     if (!current?.durationSeconds) return;
-    setTimedLeft(current.durationSeconds);
+    void unlockAudio();
+    const seconds = current.durationSeconds;
+    timedEndAtRef.current = Date.now() + seconds * 1000;
+    setTimedLeft(seconds);
     setTimedRunning(true);
   }
 
@@ -473,8 +542,14 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
           </Mono>
         </div>
         <div className="text-center">
-          <div className="text-[10px] uppercase tracking-wide text-muted">Set</div>
-          <Mono className="text-lg">{liveStats.setsDone}</Mono>
+          <div className="text-[10px] uppercase tracking-wide text-muted">
+            {session.type === "timed" ? "Esercizi" : "Set"}
+          </div>
+          <Mono className="text-lg">
+            {session.type === "timed"
+              ? `${session.exercises.filter((e) => e.sets.some((s) => s.completed)).length}/${session.exercises.length}`
+              : liveStats.setsDone}
+          </Mono>
         </div>
       </div>
 
@@ -494,6 +569,35 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
             Aggiungi esercizio
           </Button>
         </div>
+      ) : session.type === "timed" ? (
+        <TimedCircuitLayout
+          session={session}
+          sessionId={sessionId}
+          catalog={catalog}
+          exerciseIndex={exerciseIndex}
+          current={current}
+          timedLeft={timedLeft}
+          timedRunning={timedRunning}
+          menuOpenId={menuOpenId}
+          restRunning={rest.running}
+          restRemaining={rest.remaining}
+          onSelectExercise={(i) => {
+            timedEndAtRef.current = null;
+            setExerciseIndex(i);
+            setTimedLeft(null);
+            setTimedRunning(false);
+            setMenuOpenId(null);
+          }}
+          onToggleMenu={(id) =>
+            setMenuOpenId((cur) => (cur === id ? null : id))
+          }
+          onReplace={(i) => openCatalog("replace", i)}
+          onRemove={removeExerciseAt}
+          onNotes={(notes) => patchCurrent({ notes })}
+          onStartTimed={startTimedBlock}
+          onCompleteTimed={completeTimedExercise}
+          onAdd={() => openCatalog("add")}
+        />
       ) : (
         <div className="flex flex-1 flex-col gap-1 pt-2">
           <ul className="divide-y divide-hairline">
@@ -613,29 +717,19 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
 
                   {open && isCurrent && (
                     <div className="mt-4">
-                      {session.type === "timed" ? (
-                        <TimedBlock
-                          duration={current.durationSeconds ?? 40}
-                          left={timedLeft}
-                          running={timedRunning}
-                          onStart={startTimedBlock}
-                          onComplete={completeTimedExercise}
-                        />
-                      ) : (
-                        <SetsBlock
-                          exercise={current}
-                          unit={settings.unit}
-                          previousSets={previousSets}
-                          onCompleteSet={completeSet}
-                          onAddSet={addSet}
-                          onUpdateSet={(setIndex, patch) => {
-                            const sets = current.sets.map((s, idx) =>
-                              idx === setIndex ? { ...s, ...patch } : s,
-                            );
-                            patchCurrent({ sets });
-                          }}
-                        />
-                      )}
+                      <SetsBlock
+                        exercise={current}
+                        unit={settings.unit}
+                        previousSets={previousSets}
+                        onCompleteSet={completeSet}
+                        onAddSet={addSet}
+                        onUpdateSet={(setIndex, patch) => {
+                          const sets = current.sets.map((s, idx) =>
+                            idx === setIndex ? { ...s, ...patch } : s,
+                          );
+                          patchCurrent({ sets });
+                        }}
+                      />
                     </div>
                   )}
                 </li>
@@ -657,6 +751,232 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
   );
 }
 
+function TimedCircuitLayout({
+  session,
+  sessionId,
+  catalog,
+  exerciseIndex,
+  current,
+  timedLeft,
+  timedRunning,
+  menuOpenId,
+  restRunning,
+  restRemaining,
+  onSelectExercise,
+  onToggleMenu,
+  onReplace,
+  onRemove,
+  onNotes,
+  onStartTimed,
+  onCompleteTimed,
+  onAdd,
+}: {
+  session: Session;
+  sessionId: string;
+  catalog: ExerciseIndexEntry[];
+  exerciseIndex: number;
+  current?: SessionExercise;
+  timedLeft: number | null;
+  timedRunning: boolean;
+  menuOpenId: string | null;
+  restRunning: boolean;
+  restRemaining: number;
+  onSelectExercise: (index: number) => void;
+  onToggleMenu: (id: string) => void;
+  onReplace: (index: number) => void;
+  onRemove: (index: number) => void;
+  onNotes: (notes: string) => void;
+  onStartTimed: () => void;
+  onCompleteTimed: () => void;
+  onAdd: () => void;
+}) {
+  const upcoming = session.exercises
+    .map((ex, i) => ({ ex, i }))
+    .filter(({ i }) => i > exerciseIndex);
+  const done = session.exercises
+    .map((ex, i) => ({ ex, i }))
+    .filter(({ i }) => i < exerciseIndex);
+  const cat = current
+    ? catalog.find((c) => c.id === current.exerciseId)
+    : undefined;
+  const menuOpen = current ? menuOpenId === current.id : false;
+
+  return (
+    <div className="flex flex-1 flex-col gap-5 pb-4">
+      <div className="sticky top-0 z-20 -mx-4 border-b border-hairline bg-chalk/95 px-4 pb-4 pt-1 backdrop-blur-sm">
+        <TimedBlock
+          duration={current?.durationSeconds ?? 40}
+          left={timedLeft}
+          running={timedRunning}
+          onStart={onStartTimed}
+          onComplete={onCompleteTimed}
+        />
+      </div>
+
+      {current && (
+        <section className="space-y-3">
+          <p className="text-xs uppercase tracking-wide text-muted">
+            In corso · {exerciseIndex + 1}/{session.exercises.length}
+          </p>
+          <div className="flex items-start gap-3">
+            <ExerciseThumb
+              size="sm"
+              eager
+              exerciseId={current.exerciseId}
+              exerciseName={current.exerciseName}
+              imagePath={cat?.images[0]}
+              primaryMuscles={current.primaryMuscles}
+              secondaryMuscles={cat?.secondaryMuscles}
+              returnHref={`/session/live?id=${sessionId}`}
+            />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <h2 className="font-display text-xl font-bold leading-tight tracking-tight">
+                    {current.exerciseName}
+                  </h2>
+                  <p className="mt-0.5 text-sm text-muted">
+                    {current.durationSeconds ?? 40}s
+                    {current.restSeconds > 0
+                      ? ` · recupero ${current.restSeconds}s`
+                      : ""}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center text-muted touch-manipulation"
+                  aria-label="Menu esercizio"
+                  onClick={() => onToggleMenu(current.id)}
+                >
+                  ⋯
+                </button>
+              </div>
+
+              {menuOpen && (
+                <div className="mt-1 flex flex-wrap gap-2 text-sm">
+                  <button
+                    type="button"
+                    className="min-h-10 border border-hairline px-2 text-muted touch-manipulation"
+                    onClick={() => onReplace(exerciseIndex)}
+                  >
+                    Sostituisci
+                  </button>
+                  <button
+                    type="button"
+                    className="min-h-10 border border-hairline px-2 text-muted touch-manipulation"
+                    onClick={() => onRemove(exerciseIndex)}
+                  >
+                    Rimuovi
+                  </button>
+                </div>
+              )}
+
+              <input
+                className="mt-2 w-full border-0 border-b border-hairline bg-transparent py-1.5 text-sm outline-none placeholder:text-muted focus:border-accent"
+                placeholder="Note…"
+                value={current.notes ?? ""}
+                onChange={(e) => onNotes(e.target.value)}
+              />
+              <p className="mt-2 text-sm text-muted">
+                Recupero:{" "}
+                <span className={restRunning ? "text-accent" : ""}>
+                  {restRunning
+                    ? formatDuration(restRemaining)
+                    : current.restSeconds > 0
+                      ? `${current.restSeconds}s`
+                      : "Spento"}
+                </span>
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {upcoming.length > 0 && (
+        <section className="space-y-2">
+          <h3 className="text-xs uppercase tracking-wide text-muted">
+            Prossimi
+          </h3>
+          <ul className="divide-y divide-hairline">
+            {upcoming.map(({ ex, i }) => {
+              const rowCat = catalog.find((c) => c.id === ex.exerciseId);
+              return (
+                <li key={ex.id}>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-3 py-3 text-left touch-manipulation hover:text-accent"
+                    onClick={() => onSelectExercise(i)}
+                  >
+                    <ExerciseThumb
+                      size="sm"
+                      link={false}
+                      exerciseId={ex.exerciseId}
+                      exerciseName={ex.exerciseName}
+                      imagePath={rowCat?.images[0]}
+                      primaryMuscles={ex.primaryMuscles}
+                      secondaryMuscles={rowCat?.secondaryMuscles}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium">{ex.exerciseName}</div>
+                      <div className="text-xs text-muted">
+                        {ex.durationSeconds ?? 40}s
+                      </div>
+                    </div>
+                    <span className="text-xs text-muted">{i + 1}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      {done.length > 0 && (
+        <section className="space-y-2">
+          <h3 className="text-xs uppercase tracking-wide text-muted">Fatti</h3>
+          <ul className="divide-y divide-hairline opacity-60">
+            {done.map(({ ex, i }) => {
+              const rowCat = catalog.find((c) => c.id === ex.exerciseId);
+              return (
+                <li key={ex.id}>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-3 py-3 text-left touch-manipulation hover:opacity-100"
+                    onClick={() => onSelectExercise(i)}
+                  >
+                    <ExerciseThumb
+                      size="sm"
+                      link={false}
+                      exerciseId={ex.exerciseId}
+                      exerciseName={ex.exerciseName}
+                      imagePath={rowCat?.images[0]}
+                      primaryMuscles={ex.primaryMuscles}
+                      secondaryMuscles={rowCat?.secondaryMuscles}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium line-through">
+                        {ex.exerciseName}
+                      </div>
+                      <div className="text-xs text-muted">Completato</div>
+                    </div>
+                    <span className="text-xs text-accent" aria-hidden>
+                      ✓
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      <Button type="button" variant="ghost" className="w-full" onClick={onAdd}>
+        + Aggiungi esercizio
+      </Button>
+    </div>
+  );
+}
+
 function TimedBlock({
   duration,
   left,
@@ -674,8 +994,8 @@ function TimedBlock({
   const progress = left === null ? 1 : left / duration;
 
   return (
-    <div className="space-y-4 text-center">
-      <div className="font-mono text-7xl tabular-nums leading-none tracking-tighter sm:text-8xl">
+    <div className="space-y-3 text-center">
+      <div className="font-mono text-6xl tabular-nums leading-none tracking-tighter sm:text-7xl">
         {formatDuration(display)}
       </div>
       <div className="mx-auto h-[3px] w-full max-w-sm bg-ink/10">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { playRestEndSound, vibrateRestEnd } from "@/lib/utils";
+import { playRestEndSound, vibrateRestEnd } from "@/lib/feedback";
 
 interface UseRestTimerOptions {
   soundEnabled: boolean;
@@ -36,13 +36,16 @@ export function useRestTimer({
     setRunning(true);
   }, []);
 
+  // Keep ticking across brief tab freezes using absolute end time.
   useEffect(() => {
     if (!running) return;
+    let completed = false;
     const tick = () => {
-      if (!endAtRef.current) return;
+      if (!endAtRef.current || completed) return;
       const left = Math.max(0, Math.ceil((endAtRef.current - Date.now()) / 1000));
       setRemaining(left);
       if (left <= 0) {
+        completed = true;
         setRunning(false);
         endAtRef.current = null;
         playRestEndSound(soundEnabled);
@@ -52,7 +55,14 @@ export function useRestTimer({
     };
     tick();
     const id = window.setInterval(tick, 200);
-    return () => window.clearInterval(id);
+    function onVisible() {
+      if (document.visibilityState === "visible") tick();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [running, soundEnabled, vibrationEnabled]);
 
   const progress = total > 0 ? remaining / total : 0;

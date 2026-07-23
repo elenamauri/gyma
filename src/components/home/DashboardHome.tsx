@@ -148,39 +148,6 @@ export function DashboardHome() {
           </Link>
         </div>
         <CalendarStreak dateKeys={dateKeys} />
-        {completed.length > 0 && (
-          <ul className="divide-y divide-hairline">
-            {completed.slice(0, 3).map((s) => (
-              <li key={s.id}>
-                <Link
-                  href={`/history/${s.id}`}
-                  className="flex items-center justify-between gap-3 py-3 hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate font-medium">
-                      {s.routineName ?? "Sessione"}
-                      {s.prs && s.prs.length > 0 && (
-                        <span className="ml-2 text-xs text-accent">PR</span>
-                      )}
-                    </div>
-                    <div className="text-xs text-muted">
-                      {new Date(
-                        s.completedAt ?? s.startedAt,
-                      ).toLocaleDateString("it-IT", {
-                        weekday: "short",
-                        day: "numeric",
-                        month: "short",
-                      })}
-                    </div>
-                  </div>
-                  <span className="text-muted" aria-hidden>
-                    →
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
       </section>
 
       <section className="space-y-4">

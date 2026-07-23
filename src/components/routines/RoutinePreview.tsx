@@ -34,6 +34,7 @@ import type {
   RoutineExerciseReps,
   RoutineExerciseTimed,
 } from "@/lib/types";
+import { groupLabel } from "@/lib/progression";
 import { Mono } from "@/components/ui/primitives";
 import { MuscleMap } from "@/components/exercises/MuscleMap";
 import { ExerciseThumb } from "@/components/exercises/ExerciseThumb";
@@ -171,6 +172,9 @@ export function RoutineExerciseList({
   onChangeTimed,
   onRemove,
   onReplace,
+  onSuperset,
+  onDropSet,
+  onUngroup,
   onReorder,
   weightUnit = "kg",
   catalogReturnHref,
@@ -184,6 +188,9 @@ export function RoutineExerciseList({
   onChangeTimed?: (id: string, patch: Partial<RoutineExerciseTimed>) => void;
   onRemove?: (id: string) => void;
   onReplace?: (id: string) => void;
+  onSuperset?: (id: string) => void;
+  onDropSet?: (id: string) => void;
+  onUngroup?: (id: string) => void;
   onReorder?: (activeId: string, overId: string) => void;
   weightUnit?: "kg" | "lb";
   /** Back target when opening exercise info from a row thumb. */
@@ -211,13 +218,14 @@ export function RoutineExerciseList({
 
   const rows =
     type === "reps"
-      ? (exercises as RoutineExerciseReps[]).map((ex) => {
+      ? (exercises as RoutineExerciseReps[]).map((ex, index) => {
           const body = (dragHandle: ReactNode | null) => (
             <RepsRow
               ex={ex}
               cat={catalog.find((c) => c.id === ex.exerciseId)}
               open={editingId === ex.id}
               menuOpen={menuId === ex.id}
+              canSuperset={index < exercises.length - 1}
               onToggleMenu={() =>
                 setMenuId((id) => (id === ex.id ? null : ex.id))
               }
@@ -225,6 +233,9 @@ export function RoutineExerciseList({
               onChangeReps={onChangeReps}
               onRemove={onRemove}
               onReplace={onReplace}
+              onSuperset={onSuperset}
+              onDropSet={onDropSet}
+              onUngroup={onUngroup}
               weightUnit={weightUnit}
               dragHandle={dragHandle}
               catalogReturnHref={catalogReturnHref}
@@ -240,13 +251,14 @@ export function RoutineExerciseList({
             </li>
           );
         })
-      : (exercises as RoutineExerciseTimed[]).map((ex) => {
+      : (exercises as RoutineExerciseTimed[]).map((ex, index) => {
           const body = (dragHandle: ReactNode | null) => (
             <TimedRow
               ex={ex}
               cat={catalog.find((c) => c.id === ex.exerciseId)}
               open={editingId === ex.id}
               menuOpen={menuId === ex.id}
+              canSuperset={index < exercises.length - 1}
               onToggleMenu={() =>
                 setMenuId((id) => (id === ex.id ? null : ex.id))
               }
@@ -254,6 +266,9 @@ export function RoutineExerciseList({
               onChangeTimed={onChangeTimed}
               onRemove={onRemove}
               onReplace={onReplace}
+              onSuperset={onSuperset}
+              onDropSet={onDropSet}
+              onUngroup={onUngroup}
               dragHandle={dragHandle}
               catalogReturnHref={catalogReturnHref}
             />
@@ -485,10 +500,20 @@ function RowMenu({
   open,
   onToggle,
   onReplace,
+  onSuperset,
+  onDropSet,
+  onUngroup,
+  canSuperset,
+  grouped,
 }: {
   open: boolean;
   onToggle: () => void;
   onReplace?: () => void;
+  onSuperset?: () => void;
+  onDropSet?: () => void;
+  onUngroup?: () => void;
+  canSuperset?: boolean;
+  grouped?: boolean;
 }) {
   const btnRef = useRef<HTMLButtonElement>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
@@ -514,7 +539,8 @@ function RowMenu({
     return () => window.removeEventListener("scroll", onScroll, true);
   }, [open, onToggle]);
 
-  if (!onReplace) return null;
+  const hasActions = onReplace || onSuperset || onDropSet || onUngroup;
+  if (!hasActions) return null;
 
   const menu =
     open && pos
@@ -531,21 +557,65 @@ function RowMenu({
             />
             <div
               role="menu"
-              className="fixed z-[210] min-w-[10rem] border border-hairline bg-chalk py-1 shadow-lg"
+              className="fixed z-[210] min-w-[11rem] border border-hairline bg-chalk py-1 shadow-lg"
               style={{ top: pos.top, right: pos.right }}
             >
-              <button
-                type="button"
-                role="menuitem"
-                className="flex min-h-11 w-full items-center px-3 text-left text-sm touch-manipulation hover:bg-ink/[0.03]"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggle();
-                  onReplace();
-                }}
-              >
-                Sostituisci
-              </button>
+              {onReplace && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex min-h-11 w-full items-center px-3 text-left text-sm touch-manipulation hover:bg-ink/[0.03]"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggle();
+                    onReplace();
+                  }}
+                >
+                  Sostituisci
+                </button>
+              )}
+              {onSuperset && canSuperset && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex min-h-11 w-full items-center px-3 text-left text-sm touch-manipulation hover:bg-ink/[0.03]"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggle();
+                    onSuperset();
+                  }}
+                >
+                  Superset col prossimo
+                </button>
+              )}
+              {onDropSet && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex min-h-11 w-full items-center px-3 text-left text-sm touch-manipulation hover:bg-ink/[0.03]"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggle();
+                    onDropSet();
+                  }}
+                >
+                  Aggiungi drop set
+                </button>
+              )}
+              {onUngroup && grouped && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex min-h-11 w-full items-center px-3 text-left text-sm touch-manipulation hover:bg-ink/[0.03]"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggle();
+                    onUngroup();
+                  }}
+                >
+                  Sciogli gruppo
+                </button>
+              )}
             </div>
           </>,
           document.body,
@@ -577,11 +647,15 @@ function RepsRow({
   cat,
   open,
   menuOpen,
+  canSuperset,
   onToggleMenu,
   onSelect,
   onChangeReps,
   onRemove,
   onReplace,
+  onSuperset,
+  onDropSet,
+  onUngroup,
   weightUnit,
   dragHandle,
   catalogReturnHref,
@@ -590,18 +664,26 @@ function RepsRow({
   cat?: ExerciseIndexEntry;
   open: boolean;
   menuOpen: boolean;
+  canSuperset?: boolean;
   onToggleMenu: () => void;
   onSelect?: (id: string) => void;
   onChangeReps?: (id: string, patch: Partial<RoutineExerciseReps>) => void;
   onRemove?: (id: string) => void;
   onReplace?: (id: string) => void;
+  onSuperset?: (id: string) => void;
+  onDropSet?: (id: string) => void;
+  onUngroup?: (id: string) => void;
   weightUnit: "kg" | "lb";
   dragHandle: ReactNode | null;
   catalogReturnHref?: string;
 }) {
   return (
     <SwipeDelete enabled={!!onRemove} onDelete={() => onRemove?.(ex.id)}>
-      <div className="flex w-full items-center gap-1">
+      <div
+        className={`flex w-full items-center gap-1 ${
+          ex.groupId ? "border-l-2 border-accent pl-2" : ""
+        }`}
+      >
         {dragHandle}
         <ExerciseThumb
           size="sm"
@@ -619,6 +701,11 @@ function RepsRow({
           disabled={!onSelect}
         >
           <div className="truncate font-medium">{ex.exerciseName}</div>
+          {ex.groupKind && (
+            <div className="text-[10px] uppercase tracking-wide text-accent">
+              {groupLabel(ex.groupKind)}
+            </div>
+          )}
           {!open && (
             <div className="text-sm text-muted">
               {ex.sets} set · {ex.reps} rip.
@@ -629,7 +716,12 @@ function RepsRow({
         <RowMenu
           open={menuOpen}
           onToggle={onToggleMenu}
+          canSuperset={canSuperset}
+          grouped={Boolean(ex.groupId)}
           onReplace={onReplace ? () => onReplace(ex.id) : undefined}
+          onSuperset={onSuperset ? () => onSuperset(ex.id) : undefined}
+          onDropSet={onDropSet ? () => onDropSet(ex.id) : undefined}
+          onUngroup={onUngroup ? () => onUngroup(ex.id) : undefined}
         />
       </div>
 
@@ -682,11 +774,15 @@ function TimedRow({
   cat,
   open,
   menuOpen,
+  canSuperset,
   onToggleMenu,
   onSelect,
   onChangeTimed,
   onRemove,
   onReplace,
+  onSuperset,
+  onDropSet,
+  onUngroup,
   dragHandle,
   catalogReturnHref,
 }: {
@@ -694,17 +790,25 @@ function TimedRow({
   cat?: ExerciseIndexEntry;
   open: boolean;
   menuOpen: boolean;
+  canSuperset?: boolean;
   onToggleMenu: () => void;
   onSelect?: (id: string) => void;
   onChangeTimed?: (id: string, patch: Partial<RoutineExerciseTimed>) => void;
   onRemove?: (id: string) => void;
   onReplace?: (id: string) => void;
+  onSuperset?: (id: string) => void;
+  onDropSet?: (id: string) => void;
+  onUngroup?: (id: string) => void;
   dragHandle: ReactNode | null;
   catalogReturnHref?: string;
 }) {
   return (
     <SwipeDelete enabled={!!onRemove} onDelete={() => onRemove?.(ex.id)}>
-      <div className="flex w-full items-center gap-1">
+      <div
+        className={`flex w-full items-center gap-1 ${
+          ex.groupId ? "border-l-2 border-accent pl-2" : ""
+        }`}
+      >
         {dragHandle}
         <ExerciseThumb
           size="sm"
@@ -722,6 +826,11 @@ function TimedRow({
           disabled={!onSelect}
         >
           <div className="truncate font-medium">{ex.exerciseName}</div>
+          {ex.groupKind && (
+            <div className="text-[10px] uppercase tracking-wide text-accent">
+              {groupLabel(ex.groupKind)}
+            </div>
+          )}
           {!open && (
             <div className="text-sm text-muted">
               {ex.durationSeconds}s · recupero {ex.restSeconds}s
@@ -731,7 +840,12 @@ function TimedRow({
         <RowMenu
           open={menuOpen}
           onToggle={onToggleMenu}
+          canSuperset={canSuperset}
+          grouped={Boolean(ex.groupId)}
           onReplace={onReplace ? () => onReplace(ex.id) : undefined}
+          onSuperset={onSuperset ? () => onSuperset(ex.id) : undefined}
+          onDropSet={onDropSet ? () => onDropSet(ex.id) : undefined}
+          onUngroup={onUngroup ? () => onUngroup(ex.id) : undefined}
         />
       </div>
 

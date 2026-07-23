@@ -27,10 +27,20 @@ import {
   snapshotLiveSession,
 } from "@/lib/session-active";
 import {
+  applyProgressionAfterSession,
+  groupLabel,
+  restSecondsForTransition,
+} from "@/lib/progression";
+import {
   playTimedEndSound,
   unlockAudio,
   vibrateTimedEnd,
 } from "@/lib/feedback";
+import {
+  addDropSetStepSession,
+  linkSupersetWithNext,
+  unlinkFromGroup,
+} from "@/lib/exercise-groups";
 import { useAppStore } from "@/lib/store";
 import { useRestTimer } from "@/hooks/useRestTimer";
 import { useWakeLock } from "@/hooks/useWakeLock";
@@ -43,7 +53,7 @@ import {
 import { RestTimerBar } from "@/components/session/RestTimerBar";
 import { ExerciseThumb } from "@/components/exercises/ExerciseThumb";
 import { FinishWorkoutModal } from "@/components/session/FinishWorkoutModal";
-import { ExitWorkoutModal } from "@/components/session/ExitWorkoutModal";
+import { SessionSettingsModal } from "@/components/session/SessionSettingsModal";
 import { Button, Input, Mono } from "@/components/ui/primitives";
 
 function previousSetsForExercise(
@@ -67,8 +77,9 @@ function previousSetsForExercise(
 function formatPrevSet(set: LoggedSet | undefined, unit: "kg" | "lb"): string {
   if (!set) return "—";
   const w = displayWeight(set.weight, unit);
-  if (w !== undefined) return `${formatWeight(w, unit)}${unit} × ${set.reps}`;
-  return `${set.reps} rip.`;
+  const rpe = set.rpe !== undefined ? ` @${set.rpe}` : "";
+  if (w !== undefined) return `${formatWeight(w, unit)}${unit}×${set.reps}${rpe}`;
+  return `${set.reps} rip.${rpe}`;
 }
 
 export function createSessionFromRoutine(routine: Routine): Session {
@@ -84,6 +95,8 @@ export function createSessionFromRoutine(routine: Routine): Session {
           targetWeight: ex.targetWeight,
           restSeconds: ex.restSeconds,
           notes: ex.notes,
+          groupId: ex.groupId,
+          groupKind: ex.groupKind,
           sets: Array.from({ length: ex.sets }, () => ({
             id: uid(),
             reps: ex.reps,
@@ -99,6 +112,8 @@ export function createSessionFromRoutine(routine: Routine): Session {
           durationSeconds: ex.durationSeconds,
           restSeconds: ex.restSeconds,
           notes: ex.notes,
+          groupId: ex.groupId,
+          groupKind: ex.groupKind,
           sets: [
             {
               id: uid(),
@@ -140,7 +155,10 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
   const {
     sessions,
     upsertSession,
+    upsertRoutine,
+    routines,
     settings,
+    updateSettings,
     markRecent,
   } = useAppStore();
   const session = sessions.find((s) => s.id === sessionId);
@@ -153,7 +171,7 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [finishOpen, setFinishOpen] = useState(false);
-  const [exitOpen, setExitOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const sessionRef = useRef(session);
   const exerciseIndexRef = useRef(0);
   const indexInitialized = useRef(false);
@@ -397,8 +415,15 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
     );
     updateSession({ ...session, exercises });
     markRecent(current.exerciseId);
-    if (current.restSeconds > 0) {
-      rest.start(current.restSeconds);
+    const allDone = sets.every((s) => s.completed);
+    const nextEx = allDone
+      ? session.exercises[exerciseIndex + 1]
+      : undefined;
+    const restSec = allDone
+      ? restSecondsForTransition(current, nextEx)
+      : current.restSeconds;
+    if (restSec > 0) {
+      rest.start(restSec);
     }
   }
 
@@ -435,7 +460,9 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
     markRecent(current.exerciseId);
 
     if (current.restSeconds > 0 && exerciseIndex < session.exercises.length - 1) {
-      rest.start(current.restSeconds);
+      const nextEx = session.exercises[exerciseIndex + 1];
+      const restSec = restSecondsForTransition(current, nextEx);
+      if (restSec > 0) rest.start(restSec);
     }
     if (exerciseIndex < session.exercises.length - 1) {
       setExerciseIndex((i) => i + 1);
@@ -458,16 +485,16 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
     if (!session) return;
     const completed = completeSession(session, sessions);
     updateSession(completed);
+    if (completed.routineId) {
+      const routine = routines.find((r) => r.id === completed.routineId);
+      if (routine) {
+        const applied = applyProgressionAfterSession(routine, completed);
+        if (applied) upsertRoutine(applied.routine);
+      }
+    }
     setActiveSessionId(null);
     setFinishOpen(false);
     router.push(`/history/${completed.id}?done=1`);
-  }
-
-  function confirmExit() {
-    if (!session) return;
-    updateSession(snapshotLiveSession(session, exerciseIndex));
-    setExitOpen(false);
-    router.push("/");
   }
 
   function openCatalog(mode: "add" | "replace", index = exerciseIndex) {
@@ -485,6 +512,33 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
     updateSession({ ...session, exercises });
     setExerciseIndex((i) => Math.max(0, Math.min(i, exercises.length - 1)));
     setMenuOpenId(null);
+  }
+
+  function applyExerciseList(exercises: SessionExercise[]) {
+    if (!session) return;
+    updateSession({ ...session, exercises });
+    setMenuOpenId(null);
+  }
+
+  function linkSupersetAt(index: number) {
+    if (!session) return;
+    const ex = session.exercises[index];
+    if (!ex || index >= session.exercises.length - 1) return;
+    applyExerciseList(linkSupersetWithNext(session.exercises, ex.id));
+  }
+
+  function addDropSetAt(index: number) {
+    if (!session) return;
+    const ex = session.exercises[index];
+    if (!ex) return;
+    applyExerciseList(addDropSetStepSession(session.exercises, ex.id));
+  }
+
+  function ungroupAt(index: number) {
+    if (!session) return;
+    const ex = session.exercises[index];
+    if (!ex?.groupId) return;
+    applyExerciseList(unlinkFromGroup(session.exercises, ex.id));
   }
 
   if (!session) {
@@ -514,11 +568,11 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
       <header className="flex items-center gap-2 py-2">
         <button
           type="button"
-          className="flex h-11 w-11 items-center justify-center text-xl touch-manipulation"
-          aria-label="Esci dall'allenamento"
-          onClick={() => setExitOpen(true)}
+          className="flex h-11 w-11 items-center justify-center text-muted touch-manipulation hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+          aria-label="Impostazioni feedback"
+          onClick={() => setSettingsOpen(true)}
         >
-          ⌄
+          <SessionSettingsIcon />
         </button>
         <div className="flex flex-1 justify-center text-muted" aria-hidden>
           ⏱
@@ -535,10 +589,18 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
         onConfirm={finishSession}
       />
 
-      <ExitWorkoutModal
-        open={exitOpen}
-        onClose={() => setExitOpen(false)}
-        onConfirm={confirmExit}
+      <SessionSettingsModal
+        open={settingsOpen}
+        soundEnabled={settings.soundEnabled}
+        vibrationEnabled={settings.vibrationEnabled}
+        onClose={() => setSettingsOpen(false)}
+        onSoundChange={(enabled) => {
+          if (enabled) void unlockAudio();
+          updateSettings({ soundEnabled: enabled });
+        }}
+        onVibrationChange={(enabled) =>
+          updateSettings({ vibrationEnabled: enabled })
+        }
       />
 
       <div className="mb-4 grid grid-cols-3 gap-2 border border-hairline px-3 py-3">
@@ -613,6 +675,9 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
           }
           onReplace={(i) => openCatalog("replace", i)}
           onRemove={removeExerciseAt}
+          onSuperset={linkSupersetAt}
+          onDropSet={addDropSetAt}
+          onUngroup={ungroupAt}
           onNotes={(notes) => patchCurrent({ notes })}
           onStartTimed={startTimedBlock}
           onCompleteTimed={completeTimedExercise}
@@ -661,6 +726,11 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
                           >
                             {ex.exerciseName}
                           </h2>
+                          {ex.groupKind && (
+                            <div className="mt-0.5 text-[10px] uppercase tracking-wide text-accent">
+                              {groupLabel(ex.groupKind)}
+                            </div>
+                          )}
                           {!open && (
                             <div className="mt-0.5 text-sm text-muted">
                               {done}/{total} Fatto
@@ -700,6 +770,31 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
                           >
                             Sostituisci
                           </button>
+                          {i < session.exercises.length - 1 && (
+                            <button
+                              type="button"
+                              className="min-h-10 border border-hairline px-2 text-muted touch-manipulation"
+                              onClick={() => linkSupersetAt(i)}
+                            >
+                              Superset col prossimo
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="min-h-10 border border-hairline px-2 text-muted touch-manipulation"
+                            onClick={() => addDropSetAt(i)}
+                          >
+                            Aggiungi drop set
+                          </button>
+                          {ex.groupId && (
+                            <button
+                              type="button"
+                              className="min-h-10 border border-hairline px-2 text-muted touch-manipulation"
+                              onClick={() => ungroupAt(i)}
+                            >
+                              Sciogli gruppo
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="min-h-10 border border-hairline px-2 text-muted touch-manipulation"
@@ -788,6 +883,9 @@ function TimedCircuitLayout({
   onToggleMenu,
   onReplace,
   onRemove,
+  onSuperset,
+  onDropSet,
+  onUngroup,
   onNotes,
   onStartTimed,
   onCompleteTimed,
@@ -809,6 +907,9 @@ function TimedCircuitLayout({
   onToggleMenu: (id: string) => void;
   onReplace: (index: number) => void;
   onRemove: (index: number) => void;
+  onSuperset: (index: number) => void;
+  onDropSet: (index: number) => void;
+  onUngroup: (index: number) => void;
   onNotes: (notes: string) => void;
   onStartTimed: () => void;
   onCompleteTimed: () => void;
@@ -868,6 +969,11 @@ function TimedCircuitLayout({
                   <h2 className="font-display text-xl font-bold leading-tight tracking-tight">
                     {current.exerciseName}
                   </h2>
+                  {current.groupKind && (
+                    <p className="mt-0.5 text-[10px] uppercase tracking-wide text-accent">
+                      {groupLabel(current.groupKind)}
+                    </p>
+                  )}
                   <p className="mt-0.5 text-sm text-muted">
                     {current.durationSeconds ?? 40}s
                     {current.restSeconds > 0
@@ -894,6 +1000,31 @@ function TimedCircuitLayout({
                   >
                     Sostituisci
                   </button>
+                  {exerciseIndex < session.exercises.length - 1 && (
+                    <button
+                      type="button"
+                      className="min-h-10 border border-hairline px-2 text-muted touch-manipulation"
+                      onClick={() => onSuperset(exerciseIndex)}
+                    >
+                      Superset col prossimo
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="min-h-10 border border-hairline px-2 text-muted touch-manipulation"
+                    onClick={() => onDropSet(exerciseIndex)}
+                  >
+                    Aggiungi drop set
+                  </button>
+                  {current.groupId && (
+                    <button
+                      type="button"
+                      className="min-h-10 border border-hairline px-2 text-muted touch-manipulation"
+                      onClick={() => onUngroup(exerciseIndex)}
+                    >
+                      Sciogli gruppo
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="min-h-10 border border-hairline px-2 text-muted touch-manipulation"
@@ -1092,11 +1223,12 @@ function SetsBlock({
 }) {
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-[2rem_1fr_4.5rem_4rem_2.5rem] items-center gap-1.5 px-0.5 text-[10px] uppercase tracking-wide text-muted">
+      <div className="grid grid-cols-[1.75rem_minmax(0,1fr)_4rem_3.75rem_3.5rem_2.5rem] items-center gap-1.5 px-0.5 text-[10px] uppercase tracking-wide text-muted">
         <span>Set</span>
-        <span>Precedente</span>
+        <span>Prec.</span>
         <span className="text-center">Kg</span>
-        <span className="text-center">Rip.</span>
+        <span className="text-center">Rip</span>
+        <span className="text-center">RPE</span>
         <span />
       </div>
       <ul className="space-y-2">
@@ -1106,7 +1238,7 @@ function SetsBlock({
           return (
             <li
               key={set.id}
-              className="grid grid-cols-[2rem_1fr_4.5rem_4rem_2.5rem] items-center gap-1.5"
+              className="grid grid-cols-[1.75rem_minmax(0,1fr)_4rem_3.75rem_3.5rem_2.5rem] items-center gap-1.5"
             >
               <Mono
                 className={`text-center text-sm ${
@@ -1115,7 +1247,7 @@ function SetsBlock({
               >
                 {index + 1}
               </Mono>
-              <span className="truncate text-sm text-muted">
+              <span className="truncate text-xs text-muted">
                 {formatPrevSet(prev, unit)}
               </span>
               <Input
@@ -1123,7 +1255,7 @@ function SetsBlock({
                 inputMode="decimal"
                 step="any"
                 disabled={set.completed}
-                className="h-10 px-1 text-center font-mono text-base"
+                className="h-10 !px-1 text-center font-mono text-sm"
                 value={displayW ?? ""}
                 onChange={(e) => {
                   const v =
@@ -1135,11 +1267,35 @@ function SetsBlock({
                 type="number"
                 inputMode="numeric"
                 disabled={set.completed}
-                className="h-10 px-1 text-center font-mono text-base"
+                className="h-10 !px-1 text-center font-mono text-sm"
                 value={set.reps}
                 onChange={(e) =>
                   onUpdateSet(index, { reps: Number(e.target.value) || 0 })
                 }
+              />
+              <Input
+                type="number"
+                inputMode="decimal"
+                min={1}
+                max={10}
+                step={0.5}
+                disabled={set.completed}
+                className="h-10 !px-1 text-center font-mono text-sm"
+                value={set.rpe ?? ""}
+                placeholder="—"
+                aria-label="RPE"
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (raw === "") {
+                    onUpdateSet(index, { rpe: undefined });
+                    return;
+                  }
+                  const n = Number(raw);
+                  if (!Number.isFinite(n)) return;
+                  onUpdateSet(index, {
+                    rpe: Math.min(10, Math.max(1, Math.round(n * 2) / 2)),
+                  });
+                }}
               />
               <button
                 type="button"
@@ -1173,6 +1329,32 @@ function SetsBlock({
         + Aggiungi serie
       </button>
     </div>
+  );
+}
+
+function SessionSettingsIcon() {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M4 21V14" />
+      <path d="M4 10V3" />
+      <path d="M12 21v-9" />
+      <path d="M12 8V3" />
+      <path d="M20 21v-5" />
+      <path d="M20 12V3" />
+      <path d="M2 14h4" />
+      <path d="M10 8h4" />
+      <path d="M18 16h4" />
+    </svg>
   );
 }
 

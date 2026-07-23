@@ -20,6 +20,13 @@ import {
   useRoutineStats,
 } from "@/components/routines/RoutinePreview";
 import {
+  addDropSetStep,
+  addDropSetStepTimed,
+  linkSupersetWithNext,
+  unlinkFromGroup,
+} from "@/lib/exercise-groups";
+import { DEFAULT_PROGRESSION } from "@/lib/types";
+import {
   Button,
   Input,
   Label,
@@ -259,6 +266,39 @@ export function RoutineForm({
               `/routines/pick?return=${encodeURIComponent(returnPath)}&replace=${encodeURIComponent(id)}`,
             );
           }}
+          onSuperset={(id) => {
+            if (draft.type === "reps") {
+              update({
+                repsExercises: linkSupersetWithNext(draft.repsExercises, id),
+              });
+            } else {
+              update({
+                timedExercises: linkSupersetWithNext(draft.timedExercises, id),
+              });
+            }
+          }}
+          onDropSet={(id) => {
+            if (draft.type === "reps") {
+              update({
+                repsExercises: addDropSetStep(draft.repsExercises, id),
+              });
+            } else {
+              update({
+                timedExercises: addDropSetStepTimed(draft.timedExercises, id),
+              });
+            }
+          }}
+          onUngroup={(id) => {
+            if (draft.type === "reps") {
+              update({
+                repsExercises: unlinkFromGroup(draft.repsExercises, id),
+              });
+            } else {
+              update({
+                timedExercises: unlinkFromGroup(draft.timedExercises, id),
+              });
+            }
+          }}
           onReorder={(activeId, overId) => {
             if (draft.type === "reps") {
               update({
@@ -279,6 +319,156 @@ export function RoutineForm({
             }
           }}
         />
+      )}
+
+      {draft.type === "reps" && (
+        <section className="space-y-3 border-t border-hairline pt-5">
+          <h3 className="font-display text-lg font-bold">Progressione</h3>
+          <p className="text-sm text-muted">
+            Dopo ogni sessione completata, aggiorna i carichi target della
+            routine.
+          </p>
+          <label className="flex min-h-11 items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="h-5 w-5 accent-accent"
+              checked={
+                (draft.progression ?? DEFAULT_PROGRESSION).enabled
+              }
+              onChange={(e) =>
+                update({
+                  progression: {
+                    ...DEFAULT_PROGRESSION,
+                    ...draft.progression,
+                    enabled: e.target.checked,
+                  },
+                })
+              }
+            />
+            Progressione automatica
+          </label>
+          {(draft.progression ?? DEFAULT_PROGRESSION).enabled && (
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="bumpKg">Incremento (kg)</Label>
+                <Input
+                  id="bumpKg"
+                  type="number"
+                  step="0.5"
+                  min={0}
+                  className="font-mono"
+                  value={(draft.progression ?? DEFAULT_PROGRESSION).bumpKg}
+                  onChange={(e) =>
+                    update({
+                      progression: {
+                        ...DEFAULT_PROGRESSION,
+                        ...draft.progression,
+                        bumpKg: Number(e.target.value) || 0,
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <Label htmlFor="bumpWhen">Condizione incremento</Label>
+                <Select
+                  id="bumpWhen"
+                  value={
+                    (draft.progression ?? DEFAULT_PROGRESSION).bumpWhen
+                  }
+                  onChange={(e) =>
+                    update({
+                      progression: {
+                        ...DEFAULT_PROGRESSION,
+                        ...draft.progression,
+                        bumpWhen: e.target.value as
+                          | "all_sets_hit"
+                          | "rpe_avg_below",
+                      },
+                    })
+                  }
+                >
+                  <option value="all_sets_hit">
+                    Tutte le serie al target
+                  </option>
+                  <option value="rpe_avg_below">
+                    Serie ok e RPE medio sotto soglia
+                  </option>
+                </Select>
+              </div>
+              {(draft.progression ?? DEFAULT_PROGRESSION).bumpWhen ===
+                "rpe_avg_below" && (
+                <div>
+                  <Label htmlFor="rpeCeiling">Soglia RPE</Label>
+                  <Input
+                    id="rpeCeiling"
+                    type="number"
+                    min={1}
+                    max={10}
+                    step={0.5}
+                    className="font-mono"
+                    value={
+                      (draft.progression ?? DEFAULT_PROGRESSION).rpeCeiling
+                    }
+                    onChange={(e) =>
+                      update({
+                        progression: {
+                          ...DEFAULT_PROGRESSION,
+                          ...draft.progression,
+                          rpeCeiling: Number(e.target.value) || 8,
+                        },
+                      })
+                    }
+                  />
+                </div>
+              )}
+              <div>
+                <Label htmlFor="deloadN">Deload ogni N sessioni (0 = no)</Label>
+                <Input
+                  id="deloadN"
+                  type="number"
+                  min={0}
+                  className="font-mono"
+                  value={
+                    (draft.progression ?? DEFAULT_PROGRESSION)
+                      .deloadEveryNSessions
+                  }
+                  onChange={(e) =>
+                    update({
+                      progression: {
+                        ...DEFAULT_PROGRESSION,
+                        ...draft.progression,
+                        deloadEveryNSessions: Number(e.target.value) || 0,
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <Label htmlFor="deloadPct">Riduzione deload (%)</Label>
+                <Input
+                  id="deloadPct"
+                  type="number"
+                  min={0}
+                  max={50}
+                  className="font-mono"
+                  value={
+                    (draft.progression ?? DEFAULT_PROGRESSION).deloadPercent
+                  }
+                  onChange={(e) =>
+                    update({
+                      progression: {
+                        ...DEFAULT_PROGRESSION,
+                        ...draft.progression,
+                        deloadPercent: Number(e.target.value) || 0,
+                      },
+                    })
+                  }
+                />
+              </div>
+            </div>
+          )}
+        </section>
       )}
 
       <div className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom))] inset-x-0 z-30 space-y-2 border-t border-hairline bg-chalk/95 px-4 py-3 backdrop-blur-sm">

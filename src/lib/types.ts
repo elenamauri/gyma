@@ -38,6 +38,8 @@ export interface ExerciseIndex {
   facets: ExerciseFacets;
 }
 
+export type ExerciseGroupKind = "superset" | "dropset";
+
 export interface RoutineExerciseReps {
   id: string;
   exerciseId: string;
@@ -47,6 +49,9 @@ export interface RoutineExerciseReps {
   targetWeight?: number;
   restSeconds: number;
   notes?: string;
+  /** Shared id for linked exercises (superset / dropset). */
+  groupId?: string;
+  groupKind?: ExerciseGroupKind;
 }
 
 export interface RoutineExerciseTimed {
@@ -56,6 +61,24 @@ export interface RoutineExerciseTimed {
   durationSeconds: number;
   restSeconds: number;
   notes?: string;
+  groupId?: string;
+  groupKind?: ExerciseGroupKind;
+}
+
+/** Auto progression applied to routine target weights after completed sessions. */
+export interface RoutineProgression {
+  enabled: boolean;
+  /** Weight bump in kg (stored unit) when condition is met. */
+  bumpKg: number;
+  bumpWhen: "all_sets_hit" | "rpe_avg_below";
+  /** Used when bumpWhen === "rpe_avg_below". */
+  rpeCeiling: number;
+  /** 0 = deload off. After N completed sessions of this routine, reduce weights. */
+  deloadEveryNSessions: number;
+  /** Percent to reduce on deload (e.g. 10 = −10%). */
+  deloadPercent: number;
+  /** Completed sessions of this routine since last deload. */
+  sessionsSinceDeload: number;
 }
 
 export interface Routine {
@@ -67,6 +90,7 @@ export interface Routine {
   programId: string;
   /** Tile color hex for program grid. */
   color: string;
+  progression?: RoutineProgression;
   createdAt: string;
   updatedAt: string;
 }
@@ -100,6 +124,8 @@ export interface SessionExercise {
   sets: LoggedSet[];
   notes?: string;
   replacedFromId?: string;
+  groupId?: string;
+  groupKind?: ExerciseGroupKind;
 }
 
 export type SessionStatus = "active" | "completed" | "abandoned";
@@ -151,6 +177,8 @@ export interface Settings {
   wakeLockEnabled: boolean;
   /** Nome mostrato in dashboard (“Ciao …”). */
   displayName?: string;
+  /** Target completed sessions per calendar week (Mon–Sun). */
+  weeklySessionGoal?: number;
 }
 
 export interface AppData {
@@ -191,6 +219,17 @@ export const DEFAULT_SETTINGS: Settings = {
   soundEnabled: true,
   vibrationEnabled: true,
   wakeLockEnabled: true,
+  weeklySessionGoal: 3,
+};
+
+export const DEFAULT_PROGRESSION: RoutineProgression = {
+  enabled: false,
+  bumpKg: 2.5,
+  bumpWhen: "all_sets_hit",
+  rpeCeiling: 8,
+  deloadEveryNSessions: 0,
+  deloadPercent: 10,
+  sessionsSinceDeload: 0,
 };
 
 export const IMAGE_BASE =

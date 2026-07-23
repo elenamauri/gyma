@@ -113,6 +113,9 @@ function resolveChrome(
     return { title: "Catalogo", backHref: "/session/start" };
   }
   if (pathname === "/history") return { title: "Storico", backHref: "/" };
+  if (pathname === "/history/compare") {
+    return { title: "Confronto", backHref: "/history" };
+  }
   if (/^\/history\/day\//.test(pathname)) {
     return { title: "Allenamenti", backHref: "/" };
   }

@@ -5,8 +5,10 @@ import type {
   Routine,
   RoutineExerciseReps,
   RoutineExerciseTimed,
+  RoutineProgression,
   RoutineType,
 } from "@/lib/types";
+import { DEFAULT_PROGRESSION } from "@/lib/types";
 import { pickRoutineColor, uid } from "@/lib/storage";
 
 const DRAFT_KEY = "gyma:routineDraft";
@@ -17,6 +19,7 @@ export interface RoutineDraft {
   type: RoutineType;
   programId: string;
   color?: string;
+  progression?: RoutineProgression;
   repsExercises: RoutineExerciseReps[];
   timedExercises: RoutineExerciseTimed[];
   createdAt?: string;
@@ -37,6 +40,9 @@ export function emptyDraft(
       type: initial.type,
       programId: initial.programId,
       color: initial.color,
+      progression: initial.progression
+        ? { ...DEFAULT_PROGRESSION, ...initial.progression }
+        : { ...DEFAULT_PROGRESSION },
       repsExercises:
         initial.type === "reps"
           ? (initial.exercises as RoutineExerciseReps[])
@@ -54,6 +60,7 @@ export function emptyDraft(
     name: "",
     type: "reps",
     programId: programId ?? "",
+    progression: { ...DEFAULT_PROGRESSION },
     repsExercises: [],
     timedExercises: [],
     returnPath,
@@ -210,12 +217,17 @@ export function draftExerciseCount(draft: RoutineDraft) {
 export function draftToRoutine(draft: RoutineDraft): Routine {
   const now = new Date().toISOString();
   const id = draft.id ?? uid();
+  const progression = {
+    ...DEFAULT_PROGRESSION,
+    ...draft.progression,
+  };
   return {
     id,
     name: draft.name.trim(),
     type: draft.type,
     programId: draft.programId,
     color: draft.color || pickRoutineColor(id),
+    progression,
     exercises:
       draft.type === "reps" ? draft.repsExercises : draft.timedExercises,
     createdAt: draft.createdAt ?? now,

@@ -129,6 +129,22 @@ export function AppSettingsPage() {
             className="font-mono"
           />
         </div>
+        <div>
+          <Label htmlFor="weeklyGoal">Obiettivo sessioni / settimana</Label>
+          <Input
+            id="weeklyGoal"
+            type="number"
+            min={0}
+            max={14}
+            value={settings.weeklySessionGoal ?? 3}
+            onChange={(e) =>
+              updateSettings({
+                weeklySessionGoal: Math.max(0, Number(e.target.value) || 0),
+              })
+            }
+            className="font-mono"
+          />
+        </div>
         <label className="flex min-h-11 items-center gap-2 text-sm">
           <input
             type="checkbox"

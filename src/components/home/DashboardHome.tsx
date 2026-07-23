@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
-import { findActiveSession } from "@/lib/session-active";
-import { EmptyState, Mono } from "@/components/ui/primitives";
+import { findActiveSession, setActiveSessionId } from "@/lib/session-active";
+import { createSessionFromRoutine } from "@/components/session/LiveSession";
+import { EmptyState, Mono, Button } from "@/components/ui/primitives";
 import { CalendarStreak } from "@/components/history/CalendarStreak";
 import {
   Sparkline,
@@ -15,6 +16,10 @@ import {
 import { exerciseProgressSeries, exerciseVolume } from "@/lib/pr";
 import { displayWeight } from "@/lib/units";
 import { computeStreak, toDateKey } from "@/lib/utils";
+import {
+  suggestNextRoutine,
+  weeklyGoalProgress,
+} from "@/lib/progression";
 
 export function DashboardHome() {
   const router = useRouter();
@@ -25,6 +30,7 @@ export function DashboardHome() {
     sessions,
     settings,
     bodyweightLog,
+    upsertSession,
   } = useAppStore();
 
   const activeSession = useMemo(() => findActiveSession(sessions), [sessions]);
@@ -46,6 +52,20 @@ export function DashboardHome() {
     toDateKey(s.completedAt ?? s.startedAt),
   );
   const streak = computeStreak(dateKeys);
+
+  const nextRoutine = useMemo(
+    () => suggestNextRoutine(routines, sessions),
+    [routines, sessions],
+  );
+
+  const weekly = useMemo(
+    () =>
+      weeklyGoalProgress(
+        sessions,
+        settings.weeklySessionGoal ?? 3,
+      ),
+    [sessions, settings.weeklySessionGoal],
+  );
 
   const greetingName = useMemo(() => {
     const custom = settings.displayName?.trim();
@@ -121,6 +141,14 @@ export function DashboardHome() {
     router.push("/session/start");
   }
 
+  function startNext() {
+    if (!nextRoutine) return;
+    const session = createSessionFromRoutine(nextRoutine);
+    upsertSession(session);
+    setActiveSessionId(session.id);
+    router.push(`/session/live?id=${session.id}`);
+  }
+
   if (!ready) {
     return <p className="text-sm text-muted">Caricamento…</p>;
   }
@@ -139,6 +167,46 @@ export function DashboardHome() {
         <Stat label="Sessioni" value={String(completed.length)} />
         <Stat label="Routine" value={String(routines.length)} />
       </section>
+
+      {weekly.goal > 0 && (
+        <section className="space-y-2">
+          <div className="flex items-end justify-between">
+            <h2 className="font-display text-lg font-bold">Obiettivo settimana</h2>
+            <Mono className="text-sm text-muted">
+              {weekly.done}/{weekly.goal}
+            </Mono>
+          </div>
+          <div className="h-2 w-full bg-ink/10">
+            <div
+              className="h-full bg-accent transition-[width] duration-500"
+              style={{ width: `${weekly.pct}%` }}
+            />
+          </div>
+        </section>
+      )}
+
+      {nextRoutine && !hasActive && (
+        <section className="space-y-3 border border-hairline px-4 py-4">
+          <p className="text-xs uppercase tracking-wide text-muted">
+            Prossima sessione
+          </p>
+          <h2 className="font-display text-xl font-bold tracking-tight">
+            {nextRoutine.name}
+          </h2>
+          <p className="text-sm text-muted">
+            {nextRoutine.exercises.length} esercizi · {nextRoutine.type}
+            {nextRoutine.progression?.enabled ? " · progressione on" : ""}
+          </p>
+          <Button
+            type="button"
+            variant="accent"
+            className="w-full"
+            onClick={startNext}
+          >
+            Inizia
+          </Button>
+        </section>
+      )}
 
       <section className="space-y-3">
         <div className="flex items-end justify-between border-b border-hairline pb-2">

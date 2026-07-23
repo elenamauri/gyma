@@ -12,13 +12,14 @@ import {
   isSessionPaused,
   setActiveSessionId,
 } from "@/lib/session-active";
+import { applyProgressionAfterSession } from "@/lib/progression";
 import { Button, Mono } from "@/components/ui/primitives";
 import { FinishWorkoutModal } from "@/components/session/FinishWorkoutModal";
 
 export function ActiveWorkoutBar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { sessions, upsertSession } = useAppStore();
+  const { sessions, upsertSession, upsertRoutine, routines } = useAppStore();
   const [finishOpen, setFinishOpen] = useState(false);
   const [, setTick] = useState(0);
 
@@ -41,6 +42,13 @@ export function ActiveWorkoutBar() {
     if (!session) return;
     const completed = completeSession(session, sessions);
     upsertSession(completed);
+    if (completed.routineId) {
+      const routine = routines.find((r) => r.id === completed.routineId);
+      if (routine) {
+        const applied = applyProgressionAfterSession(routine, completed);
+        if (applied) upsertRoutine(applied.routine);
+      }
+    }
     setActiveSessionId(null);
     setFinishOpen(false);
     router.push(`/history/${completed.id}?done=1`);

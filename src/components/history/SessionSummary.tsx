@@ -394,12 +394,21 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
         <Button type="button" variant="accent" className="flex-1" onClick={repeat}>
           Ripeti questa sessione
         </Button>
-        <Link href="/" className="contents">
+        <Link
+          href={`/history/compare?a=${encodeURIComponent(session.id)}`}
+          className="contents"
+        >
           <Button type="button" variant="ghost" className="w-full flex-1">
-            Torna alla home
+            Confronta
           </Button>
         </Link>
       </div>
+
+      <Link href="/" className="block">
+        <Button type="button" variant="ghost" className="w-full">
+          Torna alla home
+        </Button>
+      </Link>
 
       <Button type="button" variant="danger" className="w-full" onClick={remove}>
         Elimina sessione
@@ -464,6 +473,11 @@ function ExerciseSummaryRow({
         />
         <div className="min-w-0 flex-1">
           <div className="font-medium">{ex.exerciseName}</div>
+          {ex.groupKind && (
+            <div className="text-[10px] uppercase tracking-wide text-accent">
+              {ex.groupKind === "dropset" ? "Drop set" : "Superset"}
+            </div>
+          )}
           {primaryMuscles.length > 0 && (
             <div className="mt-0.5 text-xs capitalize text-muted">
               {primaryMuscles.slice(0, 3).join(" · ")}

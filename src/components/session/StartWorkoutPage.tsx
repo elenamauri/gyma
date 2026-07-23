@@ -10,6 +10,7 @@ import {
   createEmptySession,
   createSessionFromRoutine,
 } from "@/components/session/LiveSession";
+import { suggestNextRoutine } from "@/lib/progression";
 import { Button, EmptyState } from "@/components/ui/primitives";
 
 const FREQUENT_LIMIT = 5;
@@ -17,6 +18,11 @@ const FREQUENT_LIMIT = 5;
 export function StartWorkoutPage() {
   const router = useRouter();
   const { ready, programs, routines, sessions, upsertSession } = useAppStore();
+
+  const nextRoutine = useMemo(
+    () => suggestNextRoutine(routines, sessions),
+    [routines, sessions],
+  );
 
   const frequent = useMemo(() => {
     const counts = new Map<string, number>();
@@ -69,10 +75,27 @@ export function StartWorkoutPage() {
 
   return (
     <div className="space-y-8 pb-8">
+      {nextRoutine && (
+        <section className="space-y-3 border border-hairline px-4 py-4">
+          <p className="text-xs uppercase tracking-wide text-muted">
+            Prossima sessione
+          </p>
+          <h2 className="font-display text-xl font-bold">{nextRoutine.name}</h2>
+          <Button
+            type="button"
+            variant="accent"
+            className="w-full"
+            onClick={() => startRoutine(nextRoutine)}
+          >
+            Inizia {nextRoutine.name}
+          </Button>
+        </section>
+      )}
+
       <section>
         <Button
           type="button"
-          variant="accent"
+          variant={nextRoutine ? "ghost" : "accent"}
           className="w-full"
           onClick={startEmpty}
         >

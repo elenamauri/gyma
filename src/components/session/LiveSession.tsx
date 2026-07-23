@@ -569,12 +569,14 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
         </div>
       </div>
 
-      <RestTimerBar
-        remaining={rest.remaining}
-        progress={rest.progress}
-        running={rest.running}
-        onSkip={rest.stop}
-      />
+      {session.type !== "timed" && (
+        <RestTimerBar
+          remaining={rest.remaining}
+          progress={rest.progress}
+          running={rest.running}
+          onSkip={rest.stop}
+        />
+      )}
 
       {session.exercises.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 py-16">
@@ -597,6 +599,8 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
           menuOpenId={menuOpenId}
           restRunning={rest.running}
           restRemaining={rest.remaining}
+          restProgress={rest.progress}
+          onSkipRest={rest.stop}
           onSelectExercise={(i) => {
             timedEndAtRef.current = null;
             setExerciseIndex(i);
@@ -778,6 +782,8 @@ function TimedCircuitLayout({
   menuOpenId,
   restRunning,
   restRemaining,
+  restProgress,
+  onSkipRest,
   onSelectExercise,
   onToggleMenu,
   onReplace,
@@ -797,6 +803,8 @@ function TimedCircuitLayout({
   menuOpenId: string | null;
   restRunning: boolean;
   restRemaining: number;
+  restProgress: number;
+  onSkipRest: () => void;
   onSelectExercise: (index: number) => void;
   onToggleMenu: (id: string) => void;
   onReplace: (index: number) => void;
@@ -820,19 +828,28 @@ function TimedCircuitLayout({
   return (
     <div className="flex flex-1 flex-col gap-5 pb-4">
       <div className="sticky top-0 z-20 -mx-4 border-b border-hairline bg-chalk/95 px-4 pb-4 pt-1 backdrop-blur-sm">
-        <TimedBlock
-          duration={current?.durationSeconds ?? 40}
-          left={timedLeft}
-          running={timedRunning}
-          onStart={onStartTimed}
-          onComplete={onCompleteTimed}
-        />
+        {restRunning ? (
+          <RestStickyBlock
+            remaining={restRemaining}
+            progress={restProgress}
+            onSkip={onSkipRest}
+          />
+        ) : (
+          <TimedBlock
+            duration={current?.durationSeconds ?? 40}
+            left={timedLeft}
+            running={timedRunning}
+            onStart={onStartTimed}
+            onComplete={onCompleteTimed}
+          />
+        )}
       </div>
 
       {current && (
         <section className="space-y-3">
           <p className="text-xs uppercase tracking-wide text-muted">
-            In corso · {exerciseIndex + 1}/{session.exercises.length}
+            {restRunning ? "Prossimo" : "In corso"} · {exerciseIndex + 1}/
+            {session.exercises.length}
           </p>
           <div className="flex items-start gap-3">
             <ExerciseThumb
@@ -893,16 +910,6 @@ function TimedCircuitLayout({
                 value={current.notes ?? ""}
                 onChange={(e) => onNotes(e.target.value)}
               />
-              <p className="mt-2 text-sm text-muted">
-                Recupero:{" "}
-                <span className={restRunning ? "text-accent" : ""}>
-                  {restRunning
-                    ? formatDuration(restRemaining)
-                    : current.restSeconds > 0
-                      ? `${current.restSeconds}s`
-                      : "Spento"}
-                </span>
-              </p>
             </div>
           </div>
         </section>
@@ -993,6 +1000,38 @@ function TimedCircuitLayout({
   );
 }
 
+function RestStickyBlock({
+  remaining,
+  progress,
+  onSkip,
+}: {
+  remaining: number;
+  progress: number;
+  onSkip: () => void;
+}) {
+  return (
+    <div className="space-y-3 text-center" role="timer" aria-live="polite">
+      <p className="text-xs uppercase tracking-wide text-muted">Recupero</p>
+      <div className="font-mono text-6xl tabular-nums leading-none tracking-tighter text-accent sm:text-7xl">
+        {formatDuration(remaining)}
+      </div>
+      <div className="mx-auto h-[3px] w-full max-w-sm bg-ink/10 overflow-hidden">
+        <div
+          className="h-full bg-accent motion-safe:transition-[width] motion-safe:duration-200"
+          style={{
+            width: `${Math.max(0, Math.min(100, progress * 100))}%`,
+          }}
+        />
+      </div>
+      <div className="flex justify-center">
+        <Button type="button" variant="ghost" onClick={onSkip}>
+          Salta recupero
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function TimedBlock({
   duration,
   left,
@@ -1011,6 +1050,7 @@ function TimedBlock({
 
   return (
     <div className="space-y-3 text-center">
+      <p className="text-xs uppercase tracking-wide text-muted">Timer</p>
       <div className="font-mono text-6xl tabular-nums leading-none tracking-tighter sm:text-7xl">
         {formatDuration(display)}
       </div>

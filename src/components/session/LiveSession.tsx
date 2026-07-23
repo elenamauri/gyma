@@ -363,8 +363,24 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
     updateSession({ ...session, exercises });
   }
 
-  function completeSet(setIndex: number, data: Partial<LoggedSet>) {
+  function toggleSet(setIndex: number, data: Partial<LoggedSet>) {
     if (!session || !current) return;
+    const target = current.sets[setIndex];
+    if (!target) return;
+
+    if (target.completed) {
+      const sets = current.sets.map((s, i) =>
+        i === setIndex
+          ? { ...s, completed: false, completedAt: undefined }
+          : s,
+      );
+      const exercises = session.exercises.map((ex, i) =>
+        i === exerciseIndex ? { ...ex, sets } : ex,
+      );
+      updateSession({ ...session, exercises });
+      return;
+    }
+
     void unlockAudio();
     const sets = current.sets.map((s, i) =>
       i === setIndex
@@ -721,7 +737,7 @@ export function LiveSessionView({ sessionId }: { sessionId: string }) {
                         exercise={current}
                         unit={settings.unit}
                         previousSets={previousSets}
-                        onCompleteSet={completeSet}
+                        onToggleSet={toggleSet}
                         onAddSet={addSet}
                         onUpdateSet={(setIndex, patch) => {
                           const sets = current.sets.map((s, idx) =>
@@ -1023,14 +1039,14 @@ function SetsBlock({
   exercise,
   unit,
   previousSets,
-  onCompleteSet,
+  onToggleSet,
   onAddSet,
   onUpdateSet,
 }: {
   exercise: SessionExercise;
   unit: "kg" | "lb";
   previousSets: LoggedSet[];
-  onCompleteSet: (setIndex: number, data: Partial<LoggedSet>) => void;
+  onToggleSet: (setIndex: number, data: Partial<LoggedSet>) => void;
   onAddSet: () => void;
   onUpdateSet: (setIndex: number, patch: Partial<LoggedSet>) => void;
 }) {
@@ -1087,15 +1103,16 @@ function SetsBlock({
               />
               <button
                 type="button"
-                disabled={set.completed}
-                aria-label={set.completed ? "Serie completata" : "Completa serie"}
+                aria-label={
+                  set.completed ? "Annulla serie" : "Completa serie"
+                }
                 className={`flex h-10 w-10 items-center justify-center touch-manipulation ${
                   set.completed
                     ? "bg-accent text-chalk"
                     : "border border-hairline text-muted"
                 }`}
                 onClick={() =>
-                  onCompleteSet(index, {
+                  onToggleSet(index, {
                     reps: set.reps,
                     weight: set.weight,
                     rpe: set.rpe,
